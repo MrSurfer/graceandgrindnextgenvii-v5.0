@@ -65,9 +65,9 @@ export default async function LessonPage({ params }: Props) {
     isCompleted = !!progress;
   }
 
-  const currentIndex = course.lessons.findIndex((l) => l.slug === lessonSlug);
-  const prevLesson = course.lessons[currentIndex - 1];
-  const nextLesson = course.lessons[currentIndex + 1];
+  const currentIndex = lessons.findIndex((l) => l.slug === lessonSlug);
+  const prevLesson = lessons[currentIndex - 1];
+  const nextLesson = lessons[currentIndex + 1];
 
   // YouTube Embed Helper
   const getEmbedUrl = (url: string) => {
