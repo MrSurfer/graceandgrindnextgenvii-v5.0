@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  name          String?
+  password      String?
+  role          String       @default("CUSTOMER")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  status        String       @default("ACTIVE") // ACTIVE, BLOCKED
+
+  coursesCreated Course[]     @relation("TeacherCourses")
+  enrollments    Enrollment[]
+  comments       Comment[]
+  progress       LessonProgress[]
+  teacherApp     TeacherApplication?
+  resetTokens    PasswordResetToken[]
+}
+
+model TeacherApplication {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  title       String
+  slug        String       @unique
+  description String
+  price       Float        @default(0)
+  published   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  teacherId   String
+  teacher     User         @relation("TeacherCourses", fields: [teacherId], references: [id])
+  
+  lessons     Lesson[]
+  enrollments Enrollment[]
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  content     String?
+  videoUrl    String?
+  order       Int      @default(0)
+  isFreePreview Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  comments    Comment[]
+  progress    LessonProgress[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+model LessonProgress {
+  id          String   @id @default(uuid())
+  completedAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model Enrollment {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  stripePaymentId  String?
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model PasswordResetToken {
+  id      String   @id @default(uuid())
+  token   String   @unique
+  email   String
+  expires DateTime
+  user    User     @relation(fields: [email], references: [email], onDelete: Cascade)
+
+  @@unique([email, token])
+}
