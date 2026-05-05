@@ -63,7 +63,7 @@ export default async function CourseDetailPage({ params }: Props) {
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span>By <span className="text-gray-300 font-medium">{course.teacher.name}</span></span>
           <span>·</span>
-          <span>{course.lessons.length} lessons</span>
+          <span>{lessons.length} lessons</span>
           <span>·</span>
           <span className="text-amber-500 font-bold font-mono">{course.price === 0 ? "Free" : `$${course.price}`}</span>
         </div>
