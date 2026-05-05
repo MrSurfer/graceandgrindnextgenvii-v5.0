@@ -18,22 +18,30 @@ export default async function LessonPage({ params }: Props) {
 
   const course = await prisma.course.findUnique({
     where: { slug, published: true },
-    include: { 
-      lessons: { 
-        orderBy: { order: "asc" },
-        include: {
-          comments: {
-            include: { user: { select: { id: true, name: true, email: true } } },
-            orderBy: { createdAt: "desc" }
-          }
-        }
-      } 
-    },
   });
 
   if (!course) return notFound();
 
-  const lesson = course.lessons.find((l) => l.slug === lessonSlug);
+  const isTeacherOrAdmin = (session?.user as any)?.role === "ADMIN" || course.teacherId === session?.user?.id;
+
+  const lessons = await prisma.lesson.findMany({
+    where: {
+      courseId: course.id,
+      ...(isTeacherOrAdmin ? {} : { status: "PUBLISHED" }),
+    },
+    orderBy: { order: "asc" },
+    include: {
+      comments: {
+        include: { user: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  // Attach lessons to course object
+  (course as any).lessons = lessons;
+
+  const lesson = (course as any).lessons.find((l: any) => l.slug === lessonSlug);
   if (!lesson) return notFound();
 
   let enrollment = null;

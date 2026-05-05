@@ -13,7 +13,30 @@ export async function applyForTeacher() {
   });
 
   if (existingApp) {
-    return { error: "Application already submitted." };
+    if (existingApp.status === "PENDING") {
+      return { error: "Application is currently being reviewed." };
+    }
+    
+    if (existingApp.status === "REJECTED") {
+      const lastUpdate = new Date(existingApp.updatedAt);
+      const now = new Date();
+      const diffDays = Math.ceil((now.getTime() - lastUpdate.getTime()) / (1000 * 3600 * 24));
+      
+      if (diffDays < 7) {
+        return { error: `Application was rejected. You can re-apply in ${7 - diffDays} days.` };
+      }
+
+      // Allow re-application: update status back to PENDING
+      await prisma.teacherApplication.update({
+        where: { id: existingApp.id },
+        data: { status: "PENDING", updatedAt: new Date() }
+      });
+      
+      revalidatePath("/profile");
+      return { success: true, message: "Re-application submitted successfully." };
+    }
+    
+    return { error: "Application already processed." };
   }
 
   await prisma.teacherApplication.create({

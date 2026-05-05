@@ -119,3 +119,83 @@ export async function reviewTeacherApplication(applicationId: string, status: "A
   revalidatePath("/profile");
   return { success: true };
 }
+
+export async function reviewContentRequest(requestId: string, status: "APPROVED" | "REJECTED") {
+  const session = await auth();
+  if (!session?.user?.id || (session.user as any).role !== "ADMIN") {
+    throw new Error("Unauthorized");
+  }
+
+  const request = await prisma.contentRequest.findUnique({
+    where: { id: requestId },
+    include: { lesson: true }
+  });
+
+  if (!request) throw new Error("Request not found.");
+
+  if (status === "APPROVED") {
+    const data = request.proposedData ? JSON.parse(request.proposedData) : null;
+
+    if (request.type === "NEW_LESSON" && request.lessonId) {
+      await prisma.lesson.update({
+        where: { id: request.lessonId },
+        data: { 
+          status: "PUBLISHED",
+          approvedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+        }
+      });
+    } else if (request.type === "EDIT" && request.lessonId && data) {
+      await prisma.lesson.update({
+        where: { id: request.lessonId },
+        data: {
+          title: data.title,
+          content: data.content,
+          videoUrl: data.videoUrl,
+          isFreePreview: data.isFreePreview,
+          approvedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+        }
+      });
+    } else if (request.type === "DELETE" && request.lessonId) {
+      await prisma.lesson.delete({
+        where: { id: request.lessonId }
+      });
+    }
+  }
+
+  await prisma.contentRequest.update({
+    where: { id: requestId },
+    data: { status }
+  });
+
+  revalidatePath("/admin");
+  if (request.lesson) {
+    revalidatePath(`/courses/${request.lesson.courseId}`);
+  }
+  return { success: true };
+}
+
+export async function manualAssignCourse(userId: string, courseId: string) {
+  const session = await auth();
+  if (!session?.user?.id || (session.user as any).role !== "ADMIN") {
+    throw new Error("Unauthorized");
+  }
+
+  // Check if already enrolled
+  const existing = await prisma.enrollment.findUnique({
+    where: {
+      userId_courseId: { userId, courseId }
+    }
+  });
+
+  if (existing) throw new Error("User is already enrolled in this course.");
+
+  await prisma.enrollment.create({
+    data: {
+      userId,
+      courseId,
+    }
+  });
+
+  revalidatePath("/admin");
+  return { success: true };
+}

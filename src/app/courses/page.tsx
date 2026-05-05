@@ -45,7 +45,7 @@ export default async function CoursesPage() {
           All Courses
         </h1>
         <p className="text-gray-400 text-lg max-w-2xl">
-          Master the modern JavaScript ecosystem with our curated, project-based courses.
+          Equipping the next generation of parents with practical, grace-filled wisdom and skills.
         </p>
       </div>
 
@@ -63,13 +63,22 @@ export default async function CoursesPage() {
               
               return (
                 <Link href={`/courses/${course.slug}`} key={course.id} className="block group bg-gray-950 border border-gray-800 rounded-xl p-5 hover:border-amber-500/50 transition-colors relative overflow-hidden">
-                  <h3 className="font-bold text-lg mb-2 group-hover:text-amber-400 transition-colors truncate">{course.title}</h3>
-                  <div className="flex justify-between text-sm text-gray-400 mb-2">
-                    <span>{progressPercentage}% Complete</span>
-                    <span>{completedLessons} / {totalLessons}</span>
-                  </div>
-                  <div className="w-full bg-gray-800 rounded-full h-1.5 mb-1 overflow-hidden">
-                    <div className="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${progressPercentage}%` }}></div>
+                  <div className="flex gap-4 items-center">
+                    {course.imageUrl && (
+                      <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-gray-800">
+                        <img src={course.imageUrl} className="w-full h-full object-cover" alt="" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-lg mb-1 group-hover:text-amber-400 transition-colors truncate">{course.title}</h3>
+                      <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                        <span>{progressPercentage}% Complete</span>
+                        <span>{completedLessons} / {totalLessons}</span>
+                      </div>
+                      <div className="w-full bg-gray-800 rounded-full h-1 overflow-hidden">
+                        <div className="bg-amber-500 h-1 rounded-full transition-all duration-500" style={{ width: `${progressPercentage}%` }}></div>
+                      </div>
+                    </div>
                   </div>
                   {progressPercentage === 100 && (
                     <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/10 blur-xl rounded-full"></div>
@@ -101,8 +110,12 @@ export default async function CoursesPage() {
               className="group relative bg-gray-900 rounded-2xl overflow-hidden border border-gray-800 hover:border-amber-500/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-amber-500/10"
             >
               {/* Thumbnail */}
-              <div className="aspect-video bg-gradient-to-br from-gray-800 to-gray-900 relative flex items-center justify-center">
-                <PlayCircle className="w-14 h-14 text-amber-500/60 group-hover:text-amber-500 transition-colors" />
+              <div className="aspect-video bg-gray-950 relative flex items-center justify-center overflow-hidden">
+                {course.imageUrl ? (
+                  <img src={course.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={course.title} />
+                ) : (
+                  <PlayCircle className="w-14 h-14 text-amber-500/60 group-hover:text-amber-500 transition-colors" />
+                )}
               </div>
 
               {/* Info */}

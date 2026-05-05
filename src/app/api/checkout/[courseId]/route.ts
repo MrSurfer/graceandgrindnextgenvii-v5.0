@@ -57,6 +57,7 @@ export async function GET(
     metadata: {
       courseId: course.id,
       userId: session.user.id,
+      courseSlug: course.slug,
     },
     success_url: `${process.env.NEXT_PUBLIC_APP_URL}/courses/${course.slug}?enrolled=true`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/courses/${course.slug}?cancelled=true`,

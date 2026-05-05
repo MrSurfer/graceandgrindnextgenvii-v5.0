@@ -10,16 +10,7 @@ const testimonials = [
   { quote: "An absolute masterpiece. Explanations are simple but effective, with relevant examples.", author: "Ethan Kircher" },
 ];
 
-const featuredCourses = [
-  { title: "Next.js 15 Full Course", tag: "Web Dev", description: "Build a production-ready full-stack app from scratch." },
-  { title: "TypeScript in 100 Seconds", tag: "Language", description: "The fast-track guide to TypeScript types and tooling." },
-  { title: "React Hooks Deep Dive", tag: "React", description: "Master useState, useEffect, and custom hooks." },
-  { title: "Tailwind CSS Crash Course", tag: "CSS", description: "Build beautiful UIs fast with utility-first CSS." },
-  { title: "Node.js REST API", tag: "Backend", description: "Create a robust REST API with Express and Prisma." },
-  { title: "Git & GitHub for Devs", tag: "Tools", description: "Level up your version control workflow." },
-  { title: "Database Design 101", tag: "Database", description: "Relational vs non-relational — when and how to use each." },
-  { title: "Deploy to Production", tag: "DevOps", description: "Ship your app with CI/CD, Docker, and cloud hosting." },
-];
+
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
@@ -27,25 +18,31 @@ import { auth } from "@/lib/auth";
 export default async function Home() {
   const session = await auth();
   
-  let enrolledCourses = [];
-  if (session?.user?.id) {
-    enrolledCourses = await prisma.enrollment.findMany({
-      where: { userId: session.user.id },
-      include: {
-        course: {
+  const [enrolledCourses, publicCourses] = await Promise.all([
+    session?.user?.id 
+      ? prisma.enrollment.findMany({
+          where: { userId: session.user.id },
           include: {
-            lessons: { 
-              include: { 
-                progress: { where: { userId: session.user.id } } 
-              } 
-            },
-          }
-        }
-      },
+            course: {
+              include: {
+                lessons: { 
+                  include: { 
+                    progress: { where: { userId: session.user.id } } 
+                  } 
+                },
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 4
+        })
+      : Promise.resolve([]),
+    prisma.course.findMany({
+      where: { published: true },
       orderBy: { createdAt: 'desc' },
-      take: 4
-    });
-  }
+      take: 8
+    })
+  ]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -54,18 +51,18 @@ export default async function Home() {
         <AnimatedSection className="max-w-4xl w-full">
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium mb-8">
-            <Zap className="w-4 h-4" /> New: Next.js 15 course is live!
+            <Zap className="w-4 h-4" /> New Parenting Course is live!
           </div>
 
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-6 leading-tight">
-            Brain food for{" "}
+            Equipping the{" "}
             <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-              developers.
+              Next Generation Parents.
             </span>
           </h1>
 
           <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-2xl mx-auto font-mono leading-relaxed">
-            GraceAndGrind courses make learning the JavaScript ecosystem{" "}
+            GraceAndGrind courses make life long learning{" "}
             <span className="text-amber-400">fun</span>{" "}
             <span className="text-gray-600">&&</span>{" "}
             <span className="text-amber-400">approachable</span>.
@@ -135,7 +132,7 @@ export default async function Home() {
       <section className="border-y border-gray-800/50 bg-gray-900/30 py-8 px-6">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-8 md:gap-16 text-center">
           {[
-            { value: "50,000+", label: "Developers trained" },
+            { value: "50,000+", label: "Parents Equipped" },
             { value: "200+", label: "Hours of content" },
             { value: "4.9★", label: "Average rating" },
           ].map(({ value, label }) => (
@@ -158,7 +155,7 @@ export default async function Home() {
               <AnimatedSection
                 key={i}
                 delay={i * 0.08}
-                className="p-6 rounded-2xl bg-gray-900 border border-gray-800 hover:border-gray-700 transition-colors flex flex-col justify-between gap-4"
+                className="p-6 rounded-2xl bg-gray-950 border border-gray-800 hover:border-gray-700 transition-colors flex flex-col justify-between gap-4"
               >
                 <p className="text-gray-300 text-sm leading-relaxed font-mono">"{t.quote}"</p>
                 <p className="font-bold text-amber-400 text-sm">— {t.author}</p>
@@ -174,31 +171,43 @@ export default async function Home() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">Ready to level up?</h2>
             <p className="text-gray-400 text-lg">
-              Master the JavaScript ecosystem with a yearly subscription to{" "}
+              Master modern parenting with a yearly subscription to{" "}
               <span className="text-amber-400 font-bold">GraceAndGrind Pro</span>.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
-            {featuredCourses.map((course, i) => (
+            {publicCourses.map((course, i) => (
               <AnimatedSection
-                key={i}
+                key={course.id}
                 delay={i * 0.05}
                 type="scale"
                 className="group bg-gray-950 rounded-2xl overflow-hidden border border-gray-800 hover:border-amber-500/40 transition-all hover:-translate-y-1 cursor-pointer"
               >
-                <div className="aspect-video bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center relative">
-                  <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full text-xs bg-amber-500/20 text-amber-400 font-mono border border-amber-500/20">
-                    {course.tag}
-                  </span>
-                  <div className="w-12 h-12 rounded-full bg-gray-700 group-hover:bg-amber-500/20 transition-colors flex items-center justify-center">
-                    <Zap className="w-6 h-6 text-gray-500 group-hover:text-amber-500 transition-colors" />
+                <Link href={`/courses/${course.slug}`}>
+                  <div className="aspect-video bg-gray-900 flex items-center justify-center relative overflow-hidden">
+                    {course.imageUrl ? (
+                      <img 
+                        src={course.imageUrl} 
+                        alt={course.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-gray-700 group-hover:bg-amber-500/20 transition-colors flex items-center justify-center">
+                          <Zap className="w-6 h-6 text-gray-500 group-hover:text-amber-500 transition-colors" />
+                        </div>
+                      </div>
+                    )}
+                    <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-widest font-bold bg-gray-900/80 text-amber-500 border border-amber-500/20 backdrop-blur-sm">
+                      {course.price === 0 ? "Free" : `$${course.price}`}
+                    </span>
                   </div>
-                </div>
-                <div className="p-5">
-                  <h3 className="font-bold text-base mb-1 group-hover:text-amber-400 transition-colors">{course.title}</h3>
-                  <p className="text-gray-500 text-sm">{course.description}</p>
-                </div>
+                  <div className="p-5">
+                    <h3 className="font-bold text-base mb-1 group-hover:text-amber-400 transition-colors line-clamp-1">{course.title}</h3>
+                    <p className="text-gray-500 text-sm line-clamp-2 leading-relaxed">{course.description}</p>
+                  </div>
+                </Link>
               </AnimatedSection>
             ))}
           </div>
@@ -225,10 +234,10 @@ export default async function Home() {
             $495<span className="text-2xl text-gray-500 font-normal">/year</span>
           </p>
           <Link
-            href="/register"
+            href={session ? "/courses" : "/register"}
             className="inline-flex items-center gap-2 px-10 py-5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold rounded-xl text-xl transition-all shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 hover:scale-105"
           >
-            You had me at JavaScript <ArrowRight className="w-6 h-6" />
+            {session ? "Browse Library" : "I want to be a better parent"} <ArrowRight className="w-6 h-6" />
           </Link>
           <p className="text-gray-600 text-sm mt-6">Cancel anytime. No questions asked.</p>
         </div>

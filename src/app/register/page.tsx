@@ -18,7 +18,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/profile");
+      router.push("/courses");
     }
   }, [status, router]);
 

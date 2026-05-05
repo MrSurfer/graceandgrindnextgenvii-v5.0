@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { updateCourse } from "@/app/dashboard/teacher/actions";
-import { Loader2, Save, CheckCircle2 } from "lucide-react";
+import { Loader2, Save, CheckCircle2, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function CourseSettingsForm({ course }: { course: any }) {
   const router = useRouter();
   const [title, setTitle] = useState(course.title);
   const [description, setDescription] = useState(course.description);
+  const [imageUrl, setImageUrl] = useState(course.imageUrl || "");
   const [price, setPrice] = useState(course.price.toString());
   const [published, setPublished] = useState(course.published);
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,7 @@ export default function CourseSettingsForm({ course }: { course: any }) {
       await updateCourse(course.id, {
         title,
         description,
+        imageUrl: imageUrl || null,
         price: parseFloat(price) || 0,
         published,
       });
@@ -74,6 +76,18 @@ export default function CourseSettingsForm({ course }: { course: any }) {
           </div>
 
           <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-300">Course Thumbnail URL</label>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://example.com/thumbnail.jpg"
+              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-amber-500 transition-colors"
+            />
+            <p className="text-[10px] text-gray-500 italic">Recommended aspect ratio: 16:9 (e.g. 1280x720)</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-300">Price (USD)</label>
             <input
               type="number"
@@ -86,17 +100,29 @@ export default function CourseSettingsForm({ course }: { course: any }) {
             />
           </div>
 
-          <div className="flex items-center gap-3 pt-2">
-            <input
-              type="checkbox"
-              id="published"
-              checked={published}
-              onChange={(e) => setPublished(e.target.checked)}
-              className="w-5 h-5 accent-amber-500 bg-gray-800 border-gray-700 rounded cursor-pointer"
-            />
-            <label htmlFor="published" className="text-sm font-medium text-gray-300 cursor-pointer select-none">
-              Publish Course (Make visible to students)
-            </label>
+          <div className="flex flex-col gap-3 pt-2">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="published"
+                checked={published}
+                onChange={(e) => setPublished(e.target.checked)}
+                disabled={course.published && course._count.enrollments > 0}
+                className="w-5 h-5 accent-amber-500 bg-gray-800 border-gray-700 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <label htmlFor="published" className={`text-sm font-medium cursor-pointer select-none ${course.published && course._count.enrollments > 0 ? "text-gray-500" : "text-gray-300"}`}>
+                Publish Course (Make visible to students)
+              </label>
+            </div>
+            {course.published && course._count.enrollments > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-500/80 leading-relaxed">
+                  <strong>Course Locked:</strong> You cannot unpublish this course because it has <strong>{course._count.enrollments} active students</strong>. 
+                  To protect student access to purchased content, unpublishing is restricted for courses with enrollments.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

@@ -12,22 +12,23 @@ export default async function TeacherDashboard() {
   const role = (session.user as any).role;
   if (role !== "TEACHER" && role !== "ADMIN") redirect("/");
 
-  const courses = await prisma.course.findMany({
-    where: { teacherId: session.user.id },
-    include: { _count: { select: { lessons: true, enrollments: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const enrollments = await prisma.enrollment.findMany({
-    where: {
-      course: { teacherId: session.user.id },
-    },
-    include: {
-      user: { select: { name: true, email: true } },
-      course: { select: { title: true, price: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [courses, enrollments] = await Promise.all([
+    prisma.course.findMany({
+      where: { teacherId: session.user.id },
+      include: { _count: { select: { lessons: true, enrollments: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.enrollment.findMany({
+      where: {
+        course: { teacherId: session.user.id },
+      },
+      include: {
+        user: { select: { name: true, email: true } },
+        course: { select: { title: true, price: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    })
+  ]);
 
   // Compute total revenue for this teacher's courses
   const totalRevenue = courses.reduce(

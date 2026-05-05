@@ -17,12 +17,19 @@ export default async function ProfilePage() {
     include: {
       teacherApp: true,
       enrollments: true,
+      _count: {
+        select: {
+          coursesCreated: true
+        }
+      }
     }
   });
 
   if (!user) {
     redirect("/login");
   }
+
+  const isTeacher = user.role === "TEACHER";
 
   return (
     <div className="max-w-4xl mx-auto px-6 lg:px-12 py-16 min-h-screen">
@@ -62,6 +69,7 @@ export default async function ProfilePage() {
           <ProfileClient 
             role={user.role} 
             applicationStatus={user.teacherApp?.status} 
+            lastUpdate={user.teacherApp?.updatedAt}
           />
         </div>
 
@@ -73,8 +81,12 @@ export default async function ProfilePage() {
             </h2>
             <div className="flex flex-col gap-4">
               <div className="bg-gray-800/50 rounded-xl p-4 text-center">
-                <div className="text-3xl font-extrabold text-amber-400">{user.enrollments.length}</div>
-                <div className="text-sm text-gray-400">Enrolled Courses</div>
+                <div className="text-3xl font-extrabold text-amber-400">
+                  {isTeacher ? user._count.coursesCreated : user.enrollments.length}
+                </div>
+                <div className="text-sm text-gray-400">
+                  {isTeacher ? "Courses Published" : "Enrolled Courses"}
+                </div>
               </div>
             </div>
           </div>

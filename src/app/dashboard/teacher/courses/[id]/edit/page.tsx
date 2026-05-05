@@ -11,6 +11,7 @@ export default async function EditCoursePage({ params }: { params: Promise<{ id:
 
   const course = await prisma.course.findUnique({
     where: { id },
+    include: { _count: { select: { enrollments: true } } }
   });
 
   if (!course) redirect("/dashboard/teacher");

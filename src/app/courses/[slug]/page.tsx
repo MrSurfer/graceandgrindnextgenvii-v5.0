@@ -17,17 +17,27 @@ export default async function CourseDetailPage({ params }: Props) {
   const course = await prisma.course.findUnique({
     where: { slug, published: true },
     include: {
-      teacher: { select: { name: true } },
-      lessons: { 
-        orderBy: { order: "asc" },
-        include: {
-          progress: session?.user?.id ? { where: { userId: session.user.id } } : false
-        }
-      },
+      teacher: { select: { id: true, name: true } },
     },
   });
 
   if (!course) return notFound();
+
+  const isTeacherOrAdmin = session?.user?.role === "ADMIN" || course.teacherId === session?.user?.id;
+
+  const lessons = await prisma.lesson.findMany({
+    where: {
+      courseId: course.id,
+      ...(isTeacherOrAdmin ? {} : { status: "PUBLISHED" }),
+    },
+    orderBy: { order: "asc" },
+    include: {
+      progress: session?.user?.id ? { where: { userId: session.user.id } } : false,
+    },
+  });
+
+  // Attach lessons to course object for compatibility with existing UI
+  (course as any).lessons = lessons;
 
   const isEnrolled = session?.user?.id
     ? !!(await prisma.enrollment.findUnique({
@@ -43,6 +53,11 @@ export default async function CourseDetailPage({ params }: Props) {
     <div className="max-w-5xl mx-auto px-6 lg:px-12 py-16">
       {/* Hero */}
       <div className="mb-10">
+        {course.imageUrl && (
+          <div className="w-full aspect-[21/9] rounded-3xl overflow-hidden border border-gray-800 mb-8 shadow-2xl">
+            <img src={course.imageUrl} className="w-full h-full object-cover" alt={course.title} />
+          </div>
+        )}
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">{course.title}</h1>
         <p className="text-gray-400 text-lg mb-6 max-w-3xl">{course.description}</p>
         <div className="flex items-center gap-4 text-sm text-gray-500">

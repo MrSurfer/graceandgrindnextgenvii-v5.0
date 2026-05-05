@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -42,6 +43,11 @@ export async function POST(req: NextRequest) {
         stripePaymentId: session.payment_intent as string,
       },
     });
+
+    // Revalidate paths so the user sees the enrollment immediately
+    revalidatePath("/");
+    revalidatePath("/courses");
+    revalidatePath(`/courses/${session.metadata?.courseSlug || ""}`);
 
     console.log(`✅ Enrolled user ${userId} in course ${courseId}`);
   }
