@@ -120,11 +120,12 @@ model Enrollment {
 }
 
 model PasswordResetToken {
-  id      String   @id @default(uuid())
-  token   String   @unique
-  email   String
-  expires DateTime
-  user    User     @relation(fields: [email], references: [email], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  email     String   @unique
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [email], references: [email], onDelete: Cascade)
 
   @@unique([email, token])
 }
