@@ -23,7 +23,7 @@ export default async function CourseDetailPage({ params }: Props) {
 
   if (!course) return notFound();
 
-  const isTeacherOrAdmin = session?.user?.role === "ADMIN" || course.teacherId === session?.user?.id;
+  const isTeacherOrAdmin = (session?.user as any)?.role === "ADMIN" || course.teacherId === session?.user?.id;
 
   const lessons = await prisma.lesson.findMany({
     where: {
