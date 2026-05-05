@@ -45,8 +45,8 @@ export default async function CourseDetailPage({ params }: Props) {
       }))
     : false;
 
-  const totalLessons = course.lessons.length;
-  const completedLessons = course.lessons.filter(l => (l as any).progress?.length > 0).length;
+  const totalLessons = lessons.length;
+  const completedLessons = lessons.filter(l => (l as any).progress?.length > 0).length;
   const progressPercentage = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
   return (
@@ -95,7 +95,7 @@ export default async function CourseDetailPage({ params }: Props) {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="font-bold text-xl mb-1">Enroll to unlock all lessons</h2>
-            <p className="text-gray-400 text-sm">Get full access to all {course.lessons.length} lessons.</p>
+            <p className="text-gray-400 text-sm">Get full access to all {lessons.length} lessons.</p>
           </div>
           <Link
             href={session ? `/api/checkout/${course.id}` : `/login?callbackUrl=/courses/${course.slug}`}
@@ -109,7 +109,7 @@ export default async function CourseDetailPage({ params }: Props) {
       {/* Lessons List */}
       <div className="flex flex-col gap-3">
         <h2 className="text-xl font-bold mb-4">Course Content</h2>
-        {course.lessons.map((lesson, i) => {
+        {lessons.map((lesson, i) => {
           const accessible = isEnrolled || lesson.isFreePreview;
           const lessonCompleted = (lesson as any).progress?.length > 0;
           
