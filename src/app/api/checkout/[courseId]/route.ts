@@ -37,8 +37,8 @@ export async function GET(
     return NextResponse.redirect(new URL(`/courses/${course.slug}`, req.url));
   }
 
-  // Get the base URL dynamically from the request headers
-  const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  // Get the base URL directly from the current request URL (most reliable)
+  const origin = new URL(req.url).origin;
 
   // Paid course — create Stripe Checkout Session
   const checkoutSession = await stripe.checkout.sessions.create({
