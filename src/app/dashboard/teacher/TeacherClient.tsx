@@ -1,19 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { PlusCircle, BookOpen, Users, Eye, Calendar, DollarSign } from "lucide-react";
+import Pagination from "@/components/ui/Pagination";
+
+const PAGE_SIZE = 10;
 
 export default function TeacherClient({
   courses,
   enrollments,
   totalRevenue,
+  requests,
 }: {
   courses: any[];
   enrollments: any[];
   totalRevenue: number;
+  requests: any[];
 }) {
-  const [activeTab, setActiveTab] = useState<"courses" | "enrollments">("courses");
+  const [activeTab, setActiveTab] = useState<"courses" | "enrollments" | "requests">("courses");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
 
   return (
     <>
@@ -33,10 +44,10 @@ export default function TeacherClient({
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-10">
         {[
-          { label: "Total Courses", value: courses.length, icon: BookOpen, color: "text-amber-500", bg: "bg-amber-500/10" },
-          { label: "Total Students", value: enrollments.length, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
-          { label: "Published", value: courses.filter((c) => c.published).length, icon: Eye, color: "text-green-400", bg: "bg-green-500/10" },
-          { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
+          { label: "Parenting Programs", value: courses.length, icon: BookOpen, color: "text-amber-500", bg: "bg-amber-500/10" },
+          { label: "Enrolled Parents", value: enrollments.length, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
+          { label: "Published Mastery", value: courses.filter((c) => c.published).length, icon: Eye, color: "text-green-400", bg: "bg-green-500/10" },
+          { label: "Mission Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex items-center gap-4">
             <div className={`w-12 h-12 rounded-xl ${bg} flex items-center justify-center`}>
@@ -56,13 +67,19 @@ export default function TeacherClient({
           onClick={() => setActiveTab("courses")}
           className={`pb-3 font-medium transition-colors ${activeTab === "courses" ? "text-amber-500 border-b-2 border-amber-500" : "text-gray-500 hover:text-gray-300"}`}
         >
-          Your Courses
+          Your Programs
         </button>
         <button
           onClick={() => setActiveTab("enrollments")}
           className={`pb-3 font-medium transition-colors ${activeTab === "enrollments" ? "text-amber-500 border-b-2 border-amber-500" : "text-gray-500 hover:text-gray-300"}`}
         >
-          Student Enrollments
+          Parental Engagement
+        </button>
+        <button
+          onClick={() => setActiveTab("requests")}
+          className={`pb-3 font-medium transition-colors ${activeTab === "requests" ? "text-amber-500 border-b-2 border-amber-500" : "text-gray-500 hover:text-gray-300"}`}
+        >
+          Approval Tracking
         </button>
       </div>
 
@@ -77,7 +94,7 @@ export default function TeacherClient({
               </div>
             ) : (
               <div className="divide-y divide-gray-800">
-                {courses.map((course) => (
+                {courses.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((course) => (
                   <div key={course.id} className="flex items-center justify-between px-6 py-4 hover:bg-gray-800/50 transition-colors">
                     <div>
                       <p className="font-medium">{course.title}</p>
@@ -99,6 +116,12 @@ export default function TeacherClient({
                     </div>
                   </div>
                 ))}
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={courses.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                />
               </div>
             )}
           </>
@@ -126,7 +149,7 @@ export default function TeacherClient({
                     <tbody className="divide-y divide-gray-800">
                       <tr>
                         <td className="px-6 py-3 font-medium">Jane Doe</td>
-                        <td className="px-6 py-3 text-gray-400">Mastering React 19</td>
+                        <td className="px-6 py-3 text-gray-400">Raising the Next Generation</td>
                         <td className="px-6 py-3 text-gray-500"><Calendar className="w-3 h-3 inline mr-1" /> Today</td>
                       </tr>
                     </tbody>
@@ -134,32 +157,121 @@ export default function TeacherClient({
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-800/50 text-gray-400">
+                      <tr>
+                        <th className="px-6 py-4">Parent Name</th>
+                        <th className="px-6 py-4">Program</th>
+                        <th className="px-6 py-4">Engagement Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {enrollments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((enrollment) => (
+                        <tr key={enrollment.id} className="hover:bg-gray-800/40 transition-colors">
+                          <td className="px-6 py-4 font-medium">{enrollment.user.name || enrollment.user.email}</td>
+                          <td className="px-6 py-4 text-gray-400">{enrollment.course.title}</td>
+                          <td className="px-6 py-4 text-gray-500">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5" />
+                              {new Date(enrollment.createdAt).toLocaleDateString()}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={enrollments.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setCurrentPage}
+                />
+              </>
+            )}
+          </>
+        )}
+        {activeTab === "requests" && (
+          <>
+            <div className="overflow-x-auto">
+              {requests.length === 0 ? (
+                <div className="py-16 text-center text-gray-500">
+                  <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-700 opacity-20" />
+                  <p>No active requests found.</p>
+                </div>
+              ) : (
                 <table className="w-full text-sm text-left">
                   <thead className="bg-gray-800/50 text-gray-400">
                     <tr>
-                      <th className="px-6 py-4">Student Name</th>
-                      <th className="px-6 py-4">Course</th>
-                      <th className="px-6 py-4">Enrolled On</th>
+                      <th className="px-6 py-4">Request Type</th>
+                      <th className="px-6 py-4">Program / Session</th>
+                      <th className="px-6 py-4">Submitted</th>
+                      <th className="px-6 py-4 text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
-                    {enrollments.map((enrollment) => (
-                      <tr key={enrollment.id} className="hover:bg-gray-800/40 transition-colors">
-                        <td className="px-6 py-4 font-medium">{enrollment.user.name || enrollment.user.email}</td>
-                        <td className="px-6 py-4 text-gray-400">{enrollment.course.title}</td>
-                        <td className="px-6 py-4 text-gray-500">
-                          <div className="flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5" />
-                            {new Date(enrollment.createdAt).toLocaleDateString()}
+                    {requests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((request: any) => (
+                      <tr key={request.id} className="hover:bg-gray-800/40 transition-colors">
+                        <td className="px-6 py-4 font-mono text-[10px] uppercase tracking-wider text-gray-500">
+                          {request.type.replace(/_/g, " ")}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-200">
+                            {request.lesson?.title || request.course?.title}
                           </div>
+                          {request.lesson && (
+                            <div className="text-[10px] text-gray-500">Part of: {request.course.title}</div>
+                          )}
+                          {request.adminFeedback && (
+                            <div className="mt-2 p-2 rounded bg-red-500/5 border border-red-500/10 text-[10px] text-red-400">
+                              <span className="font-bold uppercase mr-1">Feedback:</span>
+                              {request.adminFeedback}
+                            </div>
+                          )}
+                          {request.status === "REJECTED" && (
+                            (() => {
+                              const cooldown = 60 * 60 * 1000;
+                              const remaining = cooldown - (Date.now() - new Date(request.updatedAt).getTime());
+                              if (remaining > 0) {
+                                return (
+                                  <div className="mt-1 text-[9px] text-amber-500 font-bold uppercase flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    Cooldown: {Math.ceil(remaining / 60000)}m remaining
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500">
+                          {new Date(request.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight border ${
+                            request.status === "APPROVED" 
+                              ? "bg-green-500/10 text-green-500 border-green-500/20"
+                              : request.status === "REJECTED"
+                              ? "bg-red-500/10 text-red-500 border-red-500/20"
+                              : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                          }`}>
+                            {request.status}
+                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            )}
+              )}
+            </div>
+            <Pagination
+              currentPage={currentPage}
+              totalItems={requests.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setCurrentPage}
+            />
           </>
         )}
       </div>

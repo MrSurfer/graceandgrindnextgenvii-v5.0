@@ -40,8 +40,8 @@ export default function NewCoursePage() {
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Back to Dashboard
       </Link>
 
-      <h1 className="text-3xl font-extrabold tracking-tight mb-2">Create New Course</h1>
-      <p className="text-gray-400 mb-10">Start with the basics. You can add lessons after creating the course.</p>
+      <h1 className="text-3xl font-extrabold tracking-tight mb-2">Create New Program</h1>
+      <p className="text-gray-400 mb-10">Start with the basics. You can add lessons after creating the program.</p>
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 mb-6 text-sm">{error}</div>
@@ -49,14 +49,14 @@ export default function NewCoursePage() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-300">Course Title</label>
+          <label className="text-sm font-medium text-gray-300">Program Title</label>
           <input
             id="course-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            placeholder="e.g. Next.js 15 Full Course"
+            placeholder="e.g. Intentional Parenting Mastery"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors"
           />
         </div>
@@ -69,7 +69,7 @@ export default function NewCoursePage() {
             onChange={(e) => setDescription(e.target.value)}
             required
             rows={4}
-            placeholder="What will students learn?"
+            placeholder="What will parents learn and master?"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors resize-none"
           />
         </div>
@@ -85,7 +85,7 @@ export default function NewCoursePage() {
             onChange={(e) => setPrice(e.target.value)}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors"
           />
-          <p className="text-xs text-gray-600">Set to 0 for a free course.</p>
+          <p className="text-xs text-gray-600">Set to 0 for a free program.</p>
         </div>
 
         <div className="flex justify-end gap-4 pt-4">
@@ -98,7 +98,7 @@ export default function NewCoursePage() {
             id="create-course-btn"
             className="flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-lg transition-colors disabled:opacity-60"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Create Course</>}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Create Program</>}
           </button>
         </div>
       </form>

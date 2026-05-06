@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { markLessonComplete } from "@/app/courses/actions";
+import { toast } from "sonner";
 
 export default function MarkCompleteButton({ 
   lessonId, 
@@ -22,10 +23,15 @@ export default function MarkCompleteButton({
     if (completed) return;
     setLoading(true);
     try {
-      await markLessonComplete(lessonId, courseSlug, lessonSlug);
-      setCompleted(true);
-    } catch (e) {
-      console.error(e);
+      const res = await markLessonComplete(lessonId, courseSlug, lessonSlug);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        setCompleted(true);
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to mark complete");
     } finally {
       setLoading(false);
     }
@@ -35,7 +41,7 @@ export default function MarkCompleteButton({
     return (
       <div className="flex items-center gap-2 text-green-500 font-bold bg-green-500/10 px-4 py-2 rounded-lg border border-green-500/20">
         <CheckCircle className="w-5 h-5" />
-        Completed
+        Mastered
       </div>
     );
   }
@@ -47,7 +53,7 @@ export default function MarkCompleteButton({
       className="flex items-center gap-2 text-gray-950 font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
     >
       {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-      Mark as Complete
+      Mark as Mastered
     </button>
   );
 }

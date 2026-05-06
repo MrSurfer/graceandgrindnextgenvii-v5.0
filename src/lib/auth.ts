@@ -4,9 +4,10 @@ import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { env } from "./env";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  secret: process.env.AUTH_SECRET,
+  secret: env.AUTH_SECRET,
   session: { strategy: "jwt" },
   providers: [
     Google,
@@ -55,8 +56,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             data: {
               email: user.email,
               name: user.name,
+              image: user.image, // Sync profile picture from provider
               role: "CUSTOMER",
             }
+          });
+        } else if (!dbUser.image && user.image) {
+          // Update existing user image if they don't have one
+          await prisma.user.update({
+            where: { id: dbUser.id },
+            data: { image: user.image }
           });
         }
         
@@ -65,6 +73,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Attach db properties to the user object so jwt callback can use them
         (user as any).id = dbUser.id;
         (user as any).role = dbUser.role;
+      }
+      if (user?.email) {
+        const whitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
+        if (whitelist.includes(user.email)) {
+          // FORCE sync database role to SUPER_ADMIN if whitelisted
+          const dbUser = await prisma.user.findUnique({ where: { email: user.email } });
+          if (dbUser && dbUser.role !== "SUPER_ADMIN") {
+            await prisma.user.update({
+              where: { email: user.email },
+              data: { role: "SUPER_ADMIN" }
+            });
+          }
+        }
       }
       return true;
     },

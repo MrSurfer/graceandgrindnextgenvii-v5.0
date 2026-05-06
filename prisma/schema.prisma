@@ -9,19 +9,25 @@ datasource db {
 }
 
 model User {
-  id             String               @id @default(uuid())
-  email          String               @unique
+  id             String              @id @default(uuid())
+  email          String              @unique
   name           String?
   password       String?
-  role           String               @default("CUSTOMER")
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  status         String               @default("ACTIVE")
+  image          String?
+  role           String              @default("CUSTOMER")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  status         String              @default("ACTIVE")
+  bio            String?             @db.Text
+  website        String?
+  twitter        String?
+  instagram      String?
+  linkedin       String?
   comments       Comment[]
-  coursesCreated Course[]             @relation("TeacherCourses")
+  coursesCreated Course[]            @relation("TeacherCourses")
   enrollments    Enrollment[]
   progress       LessonProgress[]
-  resetTokens    PasswordResetToken[]
+  resetTokens    PasswordResetToken?
   teacherApp     TeacherApplication?
 }
 
@@ -40,12 +46,14 @@ model Course {
   slug            String           @unique
   description     String
   price           Float            @default(0)
-  imageUrl        String?
   published       Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   teacherId       String
   isPriceLocked   Boolean          @default(false)
+  imageUrl        String?
+  status          String           @default("DRAFT") // DRAFT, PENDING, PUBLISHED
+  approvedUntil   DateTime?
   contentRequests ContentRequest[]
   teacher         User             @relation("TeacherCourses", fields: [teacherId], references: [id])
   enrollments     Enrollment[]
@@ -72,17 +80,18 @@ model Lesson {
 }
 
 model ContentRequest {
-  id           String   @id @default(uuid())
-  type         String
-  status       String   @default("PENDING")
-  proposedData String?
-  reason       String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  courseId     String
-  lessonId     String?
-  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lesson       Lesson?  @relation(fields: [lessonId], references: [id])
+  id            String   @id @default(uuid())
+  type          String
+  status        String   @default("PENDING")
+  proposedData  String?
+  reason        String?
+  adminFeedback String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  courseId      String
+  lessonId      String?
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson        Lesson?  @relation(fields: [lessonId], references: [id])
 }
 
 model Comment {
@@ -121,11 +130,21 @@ model Enrollment {
 
 model PasswordResetToken {
   id        String   @id @default(uuid())
-  email     String   @unique
   token     String   @unique
+  email     String   @unique
   expires   DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [email], references: [email], onDelete: Cascade)
 
   @@unique([email, token])
+}
+model RateLimit {
+  id        String   @id @default(uuid())
+  key       String   @unique // Usually "identifier:action" (e.g., "ip:login")
+  points    Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
 }

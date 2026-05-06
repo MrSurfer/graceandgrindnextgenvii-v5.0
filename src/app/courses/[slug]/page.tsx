@@ -4,10 +4,41 @@ import { notFound } from "next/navigation";
 import { PlayCircle, Lock, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
+import { Metadata } from "next";
+
 export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ slug: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const course = await prisma.course.findUnique({
+    where: { slug },
+    select: { title: true, description: true, imageUrl: true },
+  });
+
+  if (!course) {
+    return { title: "Program Not Found" };
+  }
+
+  return {
+    title: `${course.title} | Grace & Grind`,
+    description: course.description,
+    openGraph: {
+      title: course.title,
+      description: course.description,
+      images: course.imageUrl ? [course.imageUrl] : [],
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: course.title,
+      description: course.description,
+      images: course.imageUrl ? [course.imageUrl] : [],
+    },
+  };
 }
 
 export default async function CourseDetailPage({ params }: Props) {
@@ -23,7 +54,8 @@ export default async function CourseDetailPage({ params }: Props) {
 
   if (!course) return notFound();
 
-  const isTeacherOrAdmin = (session?.user as any)?.role === "ADMIN" || course.teacherId === session?.user?.id;
+  const userRole = (session?.user as any)?.role;
+  const isTeacherOrAdmin = userRole === "ADMIN" || userRole === "SUPER_ADMIN" || course.teacherId === session?.user?.id;
 
   const lessons = await prisma.lesson.findMany({
     where: {
@@ -63,7 +95,7 @@ export default async function CourseDetailPage({ params }: Props) {
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <span>By <span className="text-gray-300 font-medium">{course.teacher.name}</span></span>
           <span>·</span>
-          <span>{lessons.length} lessons</span>
+          <span>{lessons.length} sessions</span>
           <span>·</span>
           <span className="text-amber-500 font-bold font-mono">{course.price === 0 ? "Free" : `$${course.price}`}</span>
         </div>
@@ -74,7 +106,7 @@ export default async function CourseDetailPage({ params }: Props) {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-10">
           <div className="flex justify-between items-center mb-3">
             <h2 className="font-bold text-lg flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-500" /> Your Progress
+              <CheckCircle className="w-5 h-5 text-green-500" /> Your Growth Progress
             </h2>
             <span className="text-amber-400 font-mono font-bold">{progressPercentage}%</span>
           </div>
@@ -85,7 +117,7 @@ export default async function CourseDetailPage({ params }: Props) {
             />
           </div>
           <p className="text-xs text-gray-500 mt-3">
-            {completedLessons} of {totalLessons} lessons completed
+            {completedLessons} of {totalLessons} sessions completed
           </p>
         </div>
       )}
@@ -94,8 +126,8 @@ export default async function CourseDetailPage({ params }: Props) {
       {!isEnrolled && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 mb-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="font-bold text-xl mb-1">Enroll to unlock all lessons</h2>
-            <p className="text-gray-400 text-sm">Get full access to all {lessons.length} lessons.</p>
+            <h2 className="font-bold text-xl mb-1">Enroll to unlock all sessions</h2>
+            <p className="text-gray-400 text-sm">Get full access to all {lessons.length} sessions.</p>
           </div>
           <Link
             href={session ? `/api/checkout/${course.id}` : `/login?callbackUrl=/courses/${course.slug}`}
@@ -108,7 +140,7 @@ export default async function CourseDetailPage({ params }: Props) {
 
       {/* Lessons List */}
       <div className="flex flex-col gap-3">
-        <h2 className="text-xl font-bold mb-4">Course Content</h2>
+        <h2 className="text-xl font-bold mb-4">Program Curriculum</h2>
         {lessons.map((lesson, i) => {
           const accessible = isEnrolled || lesson.isFreePreview;
           const lessonCompleted = (lesson as any).progress?.length > 0;

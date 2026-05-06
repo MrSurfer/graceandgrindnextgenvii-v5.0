@@ -42,7 +42,7 @@ export default async function CoursesPage() {
       {/* Header */}
       <div className="mb-12">
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">
-          All Courses
+          All Programs
         </h1>
         <p className="text-gray-400 text-lg max-w-2xl">
           Equipping the next generation of parents with practical, grace-filled wisdom and skills.
@@ -53,7 +53,7 @@ export default async function CoursesPage() {
       {enrolledCourses.length > 0 && (
         <div className="mb-16">
           <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <CheckCircle className="w-6 h-6 text-green-500" /> My Learning
+            <CheckCircle className="w-6 h-6 text-green-500" /> My Growth Journey
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {enrolledCourses.map(({ course }) => {
@@ -92,7 +92,7 @@ export default async function CoursesPage() {
 
       {/* Course Catalog Grid */}
       <div className="mb-8 border-b border-gray-800 pb-4">
-        <h2 className="text-xl font-bold text-gray-300">Course Catalog</h2>
+        <h2 className="text-xl font-bold text-gray-300">Mastery Catalog</h2>
       </div>
 
       {courses.length === 0 ? (

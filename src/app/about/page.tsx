@@ -15,10 +15,10 @@ export default function AboutPage() {
             <Zap className="w-4 h-4" /> Our Mission
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-6 leading-tight">
-            Empowering the next generation of <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">innovators.</span>
+            Raising the next generation with <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">purpose.</span>
           </h1>
-          <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-2xl mx-auto font-mono leading-relaxed">
-            GraceAndGrind is dedicated to providing high-quality, accessible education that bridges the gap between theory and practical application.
+          <p className="text-xl md:text-2xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+            GraceAndGrind is dedicated to providing high-quality, practical resources that bridge the gap between traditional parenting and intentional excellence.
           </p>
         </div>
       </section>
@@ -29,7 +29,7 @@ export default function AboutPage() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold mb-4">Our Core Values</h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              We believe education should be transformative, not just transactional. Here is what drives us every day.
+              We believe parenting should be transformative, not just transactional. Here is what drives us every day.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -37,27 +37,73 @@ export default function AboutPage() {
               <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center mb-6">
                 <BookOpen className="w-6 h-6 text-amber-500" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Practical Knowledge</h3>
+              <h3 className="text-xl font-bold mb-3">Intentional Excellence</h3>
               <p className="text-gray-400 leading-relaxed">
-                We focus on real-world skills. Our courses are designed to teach you not just the "how", but the "why" behind the technology you use.
+                We focus on actionable wisdom. Our courses are designed to teach you not just the "what", but the "why" behind the values you instill.
               </p>
             </div>
             <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl">
               <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-6">
                 <Users className="w-6 h-6 text-blue-500" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Community Driven</h3>
+              <h3 className="text-xl font-bold mb-3">Village Built</h3>
               <p className="text-gray-400 leading-relaxed">
-                Learning is better together. We foster a supportive environment where students and teachers collaborate and grow as a unit.
+                Raising children takes a village. We foster a supportive environment where parents collaborate and grow as a global community.
               </p>
             </div>
             <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl">
               <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-6">
                 <Shield className="w-6 h-6 text-green-500" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Uncompromising Quality</h3>
+              <h3 className="text-xl font-bold mb-3">Generational Impact</h3>
               <p className="text-gray-400 leading-relaxed">
-                We meticulously curate our content. Every lesson, video, and assignment is crafted to ensure the highest educational standards.
+                We meticulously curate our content. Every lesson, video, and resource is crafted to ensure a lasting positive impact on your family legacy.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Spiritual Foundation */}
+      <section className="py-24 px-6 lg:px-12 bg-gray-950">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-bold mb-4">A Spiritual Calling</h2>
+            <p className="text-gray-400 text-lg">
+              Our mission is driven by timeless principles of community and shared growth.
+            </p>
+          </div>
+          
+          <div className="space-y-12">
+            <div className="relative p-10 rounded-3xl bg-gray-900 border border-gray-800 overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <BookOpen className="w-32 h-32 text-amber-500" />
+              </div>
+              <p className="text-2xl md:text-3xl font-medium text-amber-500 mb-6 leading-relaxed italic">
+                "As iron sharpens iron, so one person sharpens another."
+              </p>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-px w-12 bg-amber-500/50"></div>
+                <span className="text-sm font-bold uppercase tracking-widest text-gray-500">Proverbs 27:17</span>
+              </div>
+              <p className="text-gray-400 text-lg leading-relaxed">
+                This scripture reminds us that our purpose is to strengthen and uplift one another, to challenge each other, and to grow together in our faith.
+              </p>
+            </div>
+
+            <div className="relative p-10 rounded-3xl bg-gray-900 border border-gray-800 overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Users className="w-32 h-32 text-blue-500" />
+              </div>
+              <p className="text-2xl md:text-3xl font-medium text-blue-400 mb-6 leading-relaxed italic">
+                "Carry each other's burdens, and in this way, you will fulfill the law of Christ."
+              </p>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-px w-12 bg-blue-500/50"></div>
+                <span className="text-sm font-bold uppercase tracking-widest text-gray-500">Galatians 6:2</span>
+              </div>
+              <p className="text-gray-400 text-lg leading-relaxed">
+                We are called to support one another and bear each other’s burdens in love and unity.
               </p>
             </div>
           </div>
@@ -70,13 +116,13 @@ export default function AboutPage() {
           <h2 className="text-3xl md:text-4xl font-bold mb-6">The GraceAndGrind Story</h2>
           <div className="prose prose-invert prose-amber max-w-none text-left text-gray-300">
             <p>
-              It started with a simple observation: traditional education systems were struggling to keep pace with the rapid evolution of technology. Developers were entering the workforce knowing the syntax of a language, but lacking the architectural understanding required to build scalable systems.
+              It started with a simple observation: modern life moves fast, and often the most important job in the world — parenting — gets pushed to the background or managed by trial and error. Parents were feeling overwhelmed, lacking a roadmap for raising children with clear values in a complex world.
             </p>
             <p>
-              GraceAndGrind was founded to solve this problem. We wanted to create a platform that felt less like a classroom and more like a mentorship session with a senior engineer. A place where complex concepts are broken down into digestible, engaging pieces.
+              GraceAndGrind was founded to solve this problem. We wanted to create a platform that felt less like a clinical classroom and more like a heart-to-heart mentorship session with an experienced mentor. A place where complex parenting challenges are broken down into digestible, encouraging, and actionable steps.
             </p>
             <p>
-              Today, our platform hosts industry experts sharing their hard-earned knowledge with students across the globe. Whether you're writing your first line of code or architecting a distributed backend, GraceAndGrind is here to help you level up.
+              Today, our platform hosts experts sharing their hard-earned wisdom with parents across the globe. Whether you're welcoming your first child or navigating the teenage years, GraceAndGrind is here to help you parent with intentional excellence.
             </p>
           </div>
         </div>

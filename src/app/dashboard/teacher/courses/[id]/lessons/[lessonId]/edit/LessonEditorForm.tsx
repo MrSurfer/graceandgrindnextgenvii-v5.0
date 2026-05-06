@@ -5,6 +5,8 @@ import { updateLesson, deleteLesson, requestLessonPublication, submitContentRequ
 import { Loader2, Save, Trash2, CheckCircle2, Send, Clock, ShieldCheck, AlertCircle, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import TipTapEditor from "@/components/TipTapEditor";
+import { toast } from "sonner";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function LessonEditorForm({ lesson }: { lesson: any }) {
   const router = useRouter();
@@ -15,11 +17,9 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showRequestSuccess, setShowRequestSuccess] = useState(false);
-  const [showPendingWarning, setShowPendingWarning] = useState(false);
   const [reason, setReason] = useState("");
   const [isRequestingChange, setIsRequestingChange] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isPublished = lesson.status === "PUBLISHED";
   const isPending = lesson.status === "PENDING";
@@ -51,17 +51,20 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
 
     setLoading(true);
     try {
-      await updateLesson(lesson.id, {
+      const res = await updateLesson(lesson.id, {
         title,
         content,
         videoUrl,
         isFreePreview,
       });
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-      router.refresh();
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        router.refresh();
+      }
     } catch (error: any) {
-      alert(error.message || "Failed to update lesson.");
+      toast.error(error.message || "Failed to update lesson.");
     } finally {
       setLoading(false);
     }
@@ -70,37 +73,42 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
   async function handleRequestPublish() {
     setPublishing(true);
     try {
-      await requestLessonPublication(lesson.id);
-      router.refresh();
+      const res = await requestLessonPublication(lesson.id);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        router.refresh();
+      }
     } catch (error: any) {
-      alert(error.message || "Failed to request publication.");
+      toast.error(error.message || "Failed to request publication.");
     } finally {
       setPublishing(false);
     }
   }
 
   async function handleSubmitChangeRequest(type: "EDIT" | "DELETE") {
-    if (type === "DELETE" && !confirm("Requesting deletion will remove this content for all students. Are you sure?")) return;
+    if (type === "DELETE" && !showDeleteConfirm) {
+      setShowDeleteConfirm(true);
+      return;
+    }
     if (!reason) {
-      alert("Please provide a reason for this change.");
+      toast.error("Please provide a reason for this change.");
       return;
     }
 
     setLoading(true);
     try {
-      await submitContentRequest(lesson.id, type, type === "EDIT" ? { title, content, videoUrl, isFreePreview } : null, reason);
-      setShowRequestSuccess(true);
-      setTimeout(() => setShowRequestSuccess(false), 3000);
-      setIsRequestingChange(false);
-      router.refresh();
-    } catch (error: any) {
-      if (error.message.includes("already have a pending request")) {
-        setShowPendingWarning(true);
-        setTimeout(() => setShowPendingWarning(false), 4000);
-        setIsRequestingChange(false);
+      const res = await submitContentRequest(lesson.id, type, type === "EDIT" ? { title, content, videoUrl, isFreePreview } : null, reason);
+      if (res.error) {
+        toast.error(res.error);
       } else {
-        alert(error.message || "Failed to submit request.");
+        toast.success(res.message);
+        setIsRequestingChange(false);
+        router.refresh();
       }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to submit request.");
     } finally {
       setLoading(false);
     }
@@ -108,27 +116,6 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
 
   return (
     <div className="max-w-4xl relative pb-20">
-      {/* Toast Notification */}
-      {showSuccess && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-green-500/10 border border-green-500/20 text-green-400 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 backdrop-blur-sm animate-in fade-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 className="w-5 h-5" />
-          <span className="font-medium text-sm">Changes saved successfully</span>
-        </div>
-      )}
-
-      {showRequestSuccess && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-green-500/10 border border-green-500/20 text-green-400 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 backdrop-blur-sm animate-in fade-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 className="w-5 h-5" />
-          <span className="font-medium text-sm">Change request submitted successfully</span>
-        </div>
-      )}
-
-      {showPendingWarning && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-50 backdrop-blur-sm animate-in fade-in slide-in-from-top-4 duration-300">
-          <AlertCircle className="w-5 h-5" />
-          <span className="font-medium text-sm">You already have a pending request for this lesson. Please wait for approval.</span>
-        </div>
-      )}
 
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -151,29 +138,26 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
             </div>
           )}
         </div>
-        {!isPublished && (
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm("Are you sure? Deleting drafts is permanent.")) {
-                setDeleting(true);
-                deleteLesson(lesson.id).then(() => router.push(`/dashboard/teacher/courses/${lesson.courseId}/edit`));
-              }
-            }}
-            disabled={deleting}
-            className="text-gray-500 hover:text-red-400 p-2 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            {deleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setIsRequestingChange(true)}
+          className="text-gray-500 hover:text-amber-500 p-2 rounded-lg hover:bg-gray-800 transition-colors"
+          title="Request Deletion"
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
       </div>
 
       {isRequestingChange && (
-        <div className="mb-8 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-6">
+        <div className="mb-8 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-6 animate-in fade-in slide-in-from-top-4 duration-300">
           <h3 className="font-bold text-amber-500 mb-2 flex items-center gap-2">
-            <Send className="w-4 h-4" /> Request Change for Published Lesson
+            <ShieldCheck className="w-5 h-5" /> Moderation Workflow: {isPublished ? 'Edit Live Content' : 'Delete Session'}
           </h3>
-          <p className="text-sm text-gray-400 mb-4">You are proposing an edit or deletion for live content. Please provide a reason for the administrator.</p>
+          <p className="text-xs text-amber-500/70 mb-4 leading-relaxed">
+            {isPublished 
+              ? "You are proposing a modification to live content. This requires an administrator's review to ensure curriculum consistency. If approved, you will have a 1-hour grace period to apply your changes."
+              : "Deletion requests for curriculum items must be reviewed by an administrator. Please provide a brief justification below."}
+          </p>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -189,15 +173,27 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
             >
               Submit Edit Request
             </button>
+            {showDeleteConfirm ? (
+              <button
+                onClick={() => handleSubmitChangeRequest("DELETE")}
+                disabled={loading || !reason.trim()}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-all active:scale-95 flex items-center gap-2 animate-pulse shadow-lg shadow-red-500/20"
+              >
+                <AlertCircle className="w-4 h-4" />
+                Confirm Deletion Request
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={loading}
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold px-6 py-2.5 rounded-lg text-sm transition-all active:scale-95 disabled:opacity-30 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Request Deletion
+              </button>
+            )}
             <button
-              onClick={() => handleSubmitChangeRequest("DELETE")}
-              disabled={loading}
-              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold px-4 py-2 rounded-lg text-sm transition-colors"
-            >
-              Request Deletion
-            </button>
-            <button
-              onClick={() => setIsRequestingChange(false)}
+              onClick={() => { setIsRequestingChange(false); setShowDeleteConfirm(false); }}
               className="text-gray-500 hover:text-gray-300 text-sm px-4"
             >
               Cancel
@@ -206,7 +202,8 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <LoadingOverlay isVisible={loading || publishing || deleting} message={loading ? "Syncing Mastery..." : publishing ? "Publishing Session..." : "Deleting Session..."} theme="amber" />
+      <form onSubmit={handleSubmit} className="space-y-8">
         <div className={`bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-6 ${isPublished ? "opacity-75" : ""}`}>
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-gray-300">Lesson Title</label>
@@ -242,7 +239,7 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
               className="w-5 h-5 accent-amber-500 bg-gray-800 border-gray-700 rounded cursor-pointer"
             />
             <label htmlFor="isFreePreview" className="text-sm font-medium text-gray-300 cursor-pointer select-none">
-              Free Preview (Allow unauthenticated users to view this lesson)
+              Free Preview (Allow unauthenticated parents to view this session)
             </label>
           </div>
         </div>
@@ -273,10 +270,19 @@ export default function LessonEditorForm({ lesson }: { lesson: any }) {
               <button
                 type="submit"
                 disabled={loading || publishing}
-                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-950 font-bold px-8 py-2.5 rounded-lg transition-colors shadow-lg shadow-amber-500/20"
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-950 font-bold px-8 py-2.5 rounded-lg transition-all shadow-lg shadow-amber-500/20 active:scale-95"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                {gracePeriodActive ? "Apply Changes" : "Save Draft"}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Applying Mastery...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    <span>{gracePeriodActive ? "Apply Changes" : "Save Draft"}</span>
+                  </>
+                )}
               </button>
             ) : null}
             {isPublished && !isRequestingChange && (

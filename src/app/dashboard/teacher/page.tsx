@@ -10,9 +10,9 @@ export default async function TeacherDashboard() {
   if (!session?.user?.id) redirect("/login");
 
   const role = (session.user as any).role;
-  if (role !== "TEACHER" && role !== "ADMIN") redirect("/");
+  if (role !== "TEACHER" && role !== "ADMIN" && role !== "SUPER_ADMIN") redirect("/");
 
-  const [courses, enrollments] = await Promise.all([
+  const [courses, enrollments, requests] = await Promise.all([
     prisma.course.findMany({
       where: { teacherId: session.user.id },
       include: { _count: { select: { lessons: true, enrollments: true } } },
@@ -27,6 +27,14 @@ export default async function TeacherDashboard() {
         course: { select: { title: true, price: true } },
       },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.contentRequest.findMany({
+      where: { course: { teacherId: session.user.id } },
+      include: { 
+        course: { select: { title: true } },
+        lesson: { select: { title: true } }
+      },
+      orderBy: { createdAt: "desc" }
     })
   ]);
 
@@ -38,7 +46,12 @@ export default async function TeacherDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 lg:px-12 py-16">
-      <TeacherClient courses={courses} enrollments={enrollments} totalRevenue={totalRevenue} />
+      <TeacherClient 
+        courses={courses} 
+        enrollments={enrollments} 
+        totalRevenue={totalRevenue} 
+        requests={requests}
+      />
     </div>
   );
 }

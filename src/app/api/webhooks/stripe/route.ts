@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import Stripe from "stripe";
+import { sendEmail } from "@/lib/mail";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -44,12 +45,30 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Revalidate paths so the user sees the enrollment immediately
-    revalidatePath("/");
-    revalidatePath("/courses");
-    revalidatePath(`/courses/${session.metadata?.courseSlug || ""}`);
+    // Fetch details for email
+    const [user, course] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } }),
+      prisma.course.findUnique({ where: { id: courseId }, select: { title: true } })
+    ]);
 
-    console.log(`✅ Enrolled user ${userId} in course ${courseId}`);
+    if (user && course) {
+      await sendEmail({
+        to: user.email,
+        subject: `Welcome to ${course.title}!`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 12px;">
+            <h1 style="color: #f59e0b;">Mastery Confirmed!</h1>
+            <p>Hi ${user.name || 'there'},</p>
+            <p>You've successfully secured your place in <strong>${course.title}</strong>.</p>
+            <p>Your journey toward parenting excellence starts now:</p>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/courses" style="display: inline-block; background-color: #f59e0b; color: #000; font-weight: bold; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin-top: 20px;">Begin Mastery</a>
+            <p style="margin-top: 30px; color: #6b7280; font-size: 0.875rem;">Grace & Grind is honored to support your parenting journey.</p>
+          </div>
+        `
+      });
+    }
+
+    console.log(`✅ Enrolled user ${userId} in program ${courseId} and sent mastery confirmation email.`);
   }
 
   return NextResponse.json({ received: true });

@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import Link from "next/link";
-import { Zap, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { Heart, Mail, Lock, User, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck, XCircle, CheckCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,14 +14,23 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
+  const isPasswordStrong = password.length >= 8;
+  const canSubmit = name && email && isPasswordStrong && passwordsMatch && !loading;
 
   useEffect(() => {
     if (status === "authenticated") {
       router.push("/courses");
     }
   }, [status, router]);
+
+  const [isSuccess, setIsSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,8 +49,57 @@ export default function RegisterPage() {
     if (!res.ok) {
       setError(data.error || "Something went wrong.");
     } else {
-      router.push("/login?registered=true");
+      setIsSuccess(true);
+      setTimeout(() => {
+        router.push("/login?registered=true");
+      }, 3000);
     }
+  }
+
+  if (isSuccess) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center p-6 overflow-hidden relative">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,#f59e0b10,transparent_70%)]" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative z-10 text-center space-y-8 max-w-md w-full"
+        >
+          <div className="relative inline-block">
+            <div className="w-24 h-24 bg-amber-500/20 rounded-full flex items-center justify-center border border-amber-500/30">
+              <CheckCircle className="w-12 h-12 text-amber-500" />
+            </div>
+            <motion.div 
+              animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.5, 0.2] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+              className="absolute -inset-4 bg-amber-500/20 blur-2xl rounded-full -z-10" 
+            />
+          </div>
+
+          <div className="space-y-4">
+            <h1 className="text-4xl font-bold text-white tracking-tight">Welcome Aboard!</h1>
+            <p className="text-gray-400 text-lg leading-relaxed">
+              Your journey to excellence begins now. We're preparing your mastery hub...
+            </p>
+          </div>
+
+          <div className="pt-8">
+            <div className="w-full bg-gray-900/50 h-1.5 rounded-full overflow-hidden border border-white/5">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: "100%" }}
+                transition={{ duration: 3, ease: "easeInOut" }}
+                className="h-full bg-gradient-to-r from-amber-500 to-orange-500" 
+              />
+            </div>
+            <p className="mt-4 text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold animate-pulse">
+              Redirecting to Excellence
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
@@ -49,7 +108,7 @@ export default function RegisterPage() {
         <div className="flex justify-center mb-8">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center">
-              <Zap className="text-gray-950 w-6 h-6" />
+              <Heart className="text-gray-950 w-6 h-6" />
             </div>
             <span className="font-bold text-2xl tracking-tight">GraceAndGrind</span>
           </Link>
@@ -99,32 +158,75 @@ export default function RegisterPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-300">Password</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  placeholder="Min 8 characters"
-                  minLength={8}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+                  placeholder="Create a strong password"
+                  className={`w-full bg-gray-800 border ${password && !isPasswordStrong ? 'border-red-500/50' : 'border-gray-700'} rounded-xl pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-amber-500 transition-all`}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+              <div className="flex gap-1 h-1 mt-1">
+                <div className={`flex-1 rounded-full transition-all duration-500 ${password.length > 0 ? (isPasswordStrong ? 'bg-green-500' : 'bg-red-500') : 'bg-gray-800'}`} />
+                <div className={`flex-1 rounded-full transition-all duration-500 ${isPasswordStrong && /[A-Z]/.test(password) ? 'bg-green-500' : 'bg-gray-800'}`} />
+                <div className={`flex-1 rounded-full transition-all duration-500 ${isPasswordStrong && /[0-9]/.test(password) ? 'bg-green-500' : 'bg-gray-800'}`} />
+              </div>
+              <div className="flex justify-between items-center px-1">
+                <p className="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">Strength</p>
+                <p className="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">
+                  {password.length === 0 ? "Empty" : !isPasswordStrong ? "Weak" : (/[A-Z]/.test(password) && /[0-9]/.test(password)) ? "Strong" : "Fair"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Confirm Password</label>
+              <div className="relative">
+                <ShieldCheck className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${passwordsMatch ? 'text-green-500' : 'text-gray-500'}`} />
+                <input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  placeholder="Repeat your password"
+                  className={`w-full bg-gray-800 border ${confirmPassword && !passwordsMatch ? 'border-red-500/50' : 'border-gray-700'} rounded-xl pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-amber-500 transition-all`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {confirmPassword && !passwordsMatch && (
+                <p className="text-[10px] text-red-400 font-medium">Passwords do not match</p>
+              )}
             </div>
 
             <button
               id="register-btn"
               type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-gray-950 font-bold py-3 rounded-lg transition-colors"
+              disabled={!canSubmit}
+              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-30 disabled:grayscale text-gray-950 font-bold py-4 rounded-2xl transition-all shadow-lg shadow-amber-500/20 mt-2"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <>Create Account <ArrowRight className="w-5 h-5" /></>
+                <>Create Mastery Account <ArrowRight className="w-5 h-5" /></>
               )}
             </button>
           </form>

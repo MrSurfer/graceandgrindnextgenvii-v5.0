@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Zap, Menu, X, BookOpen, LayoutDashboard, Shield } from "lucide-react";
+import { Heart, Menu, X, BookOpen, LayoutDashboard, Shield } from "lucide-react";
 import { useState } from "react";
 
 export default function Navbar() {
@@ -15,7 +15,7 @@ export default function Navbar() {
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center">
-          <Zap className="text-gray-950 w-5 h-5" />
+          <Heart className="text-gray-950 w-5 h-5" />
         </div>
         <span className="font-bold text-xl tracking-tight">GraceAndGrind</span>
       </Link>
@@ -29,12 +29,12 @@ export default function Navbar() {
 
         {session ? (
           <>
-            {(role === "TEACHER" || role === "ADMIN") && (
+            {(role === "TEACHER" || role === "ADMIN" || role === "SUPER_ADMIN") && (
               <Link href="/dashboard/teacher" className="flex items-center gap-1.5 hover:text-white transition-colors">
                 <LayoutDashboard className="w-4 h-4" /> Dashboard
               </Link>
             )}
-            {role === "ADMIN" && (
+            {(role === "ADMIN" || role === "SUPER_ADMIN") && (
               <Link href="/admin" className="flex items-center gap-1.5 hover:text-amber-400 transition-colors">
                 <Shield className="w-4 h-4" /> Admin
               </Link>
@@ -70,10 +70,23 @@ export default function Navbar() {
         )}
       </nav>
 
-      {/* Mobile hamburger */}
-      <button className="md:hidden text-gray-300" onClick={() => setMenuOpen(!menuOpen)}>
-        {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-      </button>
+      {/* Mobile Right Side */}
+      <div className="flex items-center gap-4 md:hidden">
+        {session && (
+          <Link href="/profile" className="flex items-center">
+            <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 overflow-hidden">
+              {session.user?.image ? (
+                <img src={session.user.image} alt="User avatar" className="w-full h-full object-cover" />
+              ) : (
+                session.user?.name?.charAt(0).toUpperCase() || session.user?.email?.charAt(0).toUpperCase() || "?"
+              )}
+            </div>
+          </Link>
+        )}
+        <button className="text-gray-300" onClick={() => setMenuOpen(!menuOpen)}>
+          {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
 
       {/* Mobile Menu */}
       {menuOpen && (

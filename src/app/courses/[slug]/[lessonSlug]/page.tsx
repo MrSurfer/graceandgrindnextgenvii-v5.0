@@ -22,7 +22,8 @@ export default async function LessonPage({ params }: Props) {
 
   if (!course) return notFound();
 
-  const isTeacherOrAdmin = (session?.user as any)?.role === "ADMIN" || course.teacherId === session?.user?.id;
+  const userRole = (session?.user as any)?.role;
+  const isTeacherOrAdmin = userRole === "ADMIN" || userRole === "SUPER_ADMIN" || course.teacherId === session?.user?.id;
 
   const lessons = await prisma.lesson.findMany({
     where: {
@@ -51,8 +52,8 @@ export default async function LessonPage({ params }: Props) {
     });
   }
 
-  // Check access
-  if (!lesson.isFreePreview) {
+  // Check access (Admins, Super Admins, and Teachers bypass enrollment)
+  if (!lesson.isFreePreview && !isTeacherOrAdmin) {
     if (!session?.user?.id) redirect(`/login?callbackUrl=/courses/${slug}/${lessonSlug}`);
     if (!enrollment) redirect(`/courses/${slug}`);
   }
@@ -92,7 +93,7 @@ export default async function LessonPage({ params }: Props) {
     <div className="max-w-4xl mx-auto px-6 lg:px-12 py-16">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-8">
-        <Link href="/courses" className="hover:text-white transition-colors">Courses</Link>
+        <Link href="/courses" className="hover:text-white transition-colors">Programs</Link>
         <span>/</span>
         <Link href={`/courses/${slug}`} className="hover:text-white transition-colors">{course.title}</Link>
         <span>/</span>
@@ -140,7 +141,7 @@ export default async function LessonPage({ params }: Props) {
           >
             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             <div className="text-left">
-              <div className="text-xs text-gray-600">Previous</div>
+              <div className="text-xs text-gray-600">Previous Session</div>
               <div className="font-medium">{prevLesson.title}</div>
             </div>
           </Link>
@@ -152,7 +153,7 @@ export default async function LessonPage({ params }: Props) {
             className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
           >
             <div className="text-right">
-              <div className="text-xs text-gray-600">Next</div>
+              <div className="text-xs text-gray-600">Next Session</div>
               <div className="font-medium">{nextLesson.title}</div>
             </div>
             <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -168,7 +169,7 @@ export default async function LessonPage({ params }: Props) {
           lessonSlug={lessonSlug}
           comments={lesson.comments}
           currentUserId={session?.user?.id}
-          isAdminOrTeacher={(session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "TEACHER"}
+          isAdminOrTeacher={userRole === "ADMIN" || userRole === "TEACHER" || userRole === "SUPER_ADMIN"}
         />
       )}
     </div>

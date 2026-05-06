@@ -6,6 +6,7 @@ import { BookOpen, FileText, Plus, Settings } from "lucide-react";
 import { useState } from "react";
 import { createLesson } from "@/app/dashboard/teacher/actions";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function CourseSidebar({ courseId, lessons }: { courseId: string; lessons: any[] }) {
   const pathname = usePathname();
@@ -17,11 +18,14 @@ export default function CourseSidebar({ courseId, lessons }: { courseId: string;
     try {
       const title = `New Lesson ${lessons.length + 1}`;
       const res = await createLesson(courseId, title);
-      if (res.success) {
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
         router.push(`/dashboard/teacher/courses/${courseId}/lessons/${res.lessonId}/edit`);
       }
-    } catch (error) {
-      alert("Failed to create lesson");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create lesson");
     } finally {
       setIsCreating(false);
     }

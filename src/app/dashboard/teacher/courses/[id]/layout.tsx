@@ -22,7 +22,8 @@ export default async function CourseWorkspaceLayout({
     },
   });
 
-  if (!course || (course.teacherId !== session.user.id && (session.user as any).role !== "ADMIN")) {
+  const userRole = (session.user as any).role;
+  if (!course || (course.teacherId !== session.user.id && userRole !== "ADMIN" && userRole !== "SUPER_ADMIN")) {
     redirect("/dashboard/teacher");
   }
 

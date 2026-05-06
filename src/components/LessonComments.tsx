@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { addComment, deleteComment } from "@/app/courses/actions";
 import { Loader2, Trash2, User } from "lucide-react";
+import { toast } from "sonner";
 
 type CommentType = {
   id: string;
@@ -35,10 +36,15 @@ export default function LessonComments({
     if (!content.trim()) return;
     setLoading(true);
     try {
-      await addComment(lessonId, content, courseSlug, lessonSlug);
-      setContent("");
-    } catch (error) {
-      console.error(error);
+      const res = await addComment(lessonId, content, courseSlug, lessonSlug);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        setContent("");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to post comment");
     } finally {
       setLoading(false);
     }
@@ -48,9 +54,14 @@ export default function LessonComments({
     if (!confirm("Delete this comment?")) return;
     setDeletingId(commentId);
     try {
-      await deleteComment(commentId, courseSlug, lessonSlug);
-    } catch (error) {
-      console.error(error);
+      const res = await deleteComment(commentId, courseSlug, lessonSlug);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete comment");
     } finally {
       setDeletingId(null);
     }

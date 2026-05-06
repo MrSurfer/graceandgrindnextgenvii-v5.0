@@ -4,7 +4,7 @@ import { useState, Suspense, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Zap, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { Heart, Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
@@ -13,16 +13,33 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const { data: session, status } = useSession();
+  const userRole = (session?.user as any)?.role;
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.push(callbackUrl);
+    if (status === "authenticated" && userRole) {
+      // If there's an explicit callbackUrl from search params, use it.
+      // Otherwise, use role-based defaults.
+      const explicitCallback = searchParams.get("callbackUrl");
+      if (explicitCallback) {
+        router.push(explicitCallback);
+        return;
+      }
+
+      if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") {
+        router.push("/admin");
+      } else if (userRole === "TEACHER") {
+        router.push("/dashboard/teacher");
+      } else {
+        router.push("/courses");
+      }
     }
-  }, [status, router, callbackUrl]);
+  }, [status, userRole, router, searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,13 +52,11 @@ function LoginForm() {
       redirect: false,
     });
 
-    setLoading(false);
-
     if (result?.error) {
       setError("Invalid email or password.");
-    } else {
-      router.push(callbackUrl);
+      setLoading(false);
     }
+    // We don't need to push here because the useEffect will catch the status change
   }
 
   return (
@@ -49,7 +64,7 @@ function LoginForm() {
       <div className="flex justify-center mb-8">
         <Link href="/" className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center">
-            <Zap className="text-gray-950 w-6 h-6" />
+            <Heart className="text-gray-950 w-6 h-6" />
           </div>
           <span className="font-bold text-2xl tracking-tight">GraceAndGrind</span>
         </Link>
@@ -83,31 +98,53 @@ function LoginForm() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-300">Password</label>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Password</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-amber-500 transition-all"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-amber-500 focus:ring-amber-500 focus:ring-offset-gray-900" 
+              />
+              <span className="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Remember me</span>
+            </label>
+            <Link href="/forgot-password" className="text-xs text-amber-500/80 hover:text-amber-400 font-medium transition-colors">
+              Forgot password?
+            </Link>
           </div>
 
           <button
             id="login-btn"
             type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-gray-950 font-bold py-3 rounded-lg transition-colors"
+            disabled={loading || !email || !password}
+            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-30 disabled:grayscale text-gray-950 font-bold py-4 rounded-2xl transition-all shadow-lg shadow-amber-500/20 mt-2"
           >
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <>Sign In <ArrowRight className="w-5 h-5" /></>
+              <>Sign In to Mastery <ArrowRight className="w-5 h-5" /></>
             )}
           </button>
         </form>
