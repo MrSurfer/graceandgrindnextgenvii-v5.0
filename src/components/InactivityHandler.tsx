@@ -5,6 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
+import { getBaseUrl } from "@/lib/utils";
 
 /**
  * Handles inactivity timeouts based on user roles.
@@ -29,7 +30,7 @@ export default function InactivityHandler() {
       description: "You have been logged out due to inactivity.",
       duration: 5000,
     });
-    await signOut({ callbackUrl: "/login?expired=true" });
+    await signOut({ callbackUrl: `${getBaseUrl()}/login?expired=true` });
   }, []);
 
   useEffect(() => {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
+import { getBaseUrl } from "@/lib/utils";
 import { Heart, Menu, X, BookOpen, LayoutDashboard, Shield } from "lucide-react";
 import { useState } from "react";
 
@@ -57,7 +58,7 @@ export default function Navbar() {
               </Link>
               <button
                 id="signout-btn"
-                onClick={() => signOut({ callbackUrl: window.location.origin })}
+                onClick={() => signOut({ callbackUrl: getBaseUrl() })}
                 className="px-3 py-1.5 rounded-md bg-gray-800 hover:bg-gray-700 transition-colors text-white text-xs"
               >
                 Sign Out
@@ -99,7 +100,7 @@ export default function Navbar() {
           <Link href="/courses" onClick={() => setMenuOpen(false)} className="text-gray-300 hover:text-white">Courses</Link>
           <Link href="/about" onClick={() => setMenuOpen(false)} className="text-gray-300 hover:text-white">About</Link>
           {session ? (
-            <button onClick={() => { setMenuOpen(false); signOut({ callbackUrl: window.location.origin }); }} className="text-left text-gray-300 hover:text-white">
+            <button onClick={() => { setMenuOpen(false); signOut({ callbackUrl: getBaseUrl() }); }} className="text-left text-gray-300 hover:text-white">
               Sign Out
             </button>
           ) : (
