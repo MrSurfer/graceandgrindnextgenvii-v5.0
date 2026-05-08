@@ -7,6 +7,8 @@ const envSchema = z.object({
 
   // Authentication
   AUTH_SECRET: z.string().min(1),
+  AUTH_TRUST_HOST: z.string().optional(),
+  AUTH_URL: z.string().url().optional(),
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 
   // Stripe

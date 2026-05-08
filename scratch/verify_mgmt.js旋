@@ -1,0 +1,21 @@
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+async function verifyUsers() {
+  const emails = ['mys.test25@gmail.com', 'yironet3@gmail.com', 'nattyonas@gmail.com'];
+  try {
+    for (const email of emails) {
+      await prisma.user.update({
+        where: { email },
+        data: { emailVerified: new Date() }
+      });
+      console.log(`Verified ${email}`);
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+verifyUsers();

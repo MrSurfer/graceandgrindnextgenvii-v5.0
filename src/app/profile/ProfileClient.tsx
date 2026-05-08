@@ -16,6 +16,7 @@ export default function ProfileClient({
     email: string;
     image: string;
     role: string;
+    displayRole: string;
     bio: string;
     website: string;
     twitter: string;
@@ -134,8 +135,18 @@ export default function ProfileClient({
               <label className="text-sm font-medium text-gray-500 flex items-center gap-1">
                 <Shield className="w-3 h-3" /> Role
               </label>
-              <div className="inline-flex w-fit px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/20">
-                {user.role}
+              <div className={`inline-flex w-fit px-3 py-1 rounded-full text-xs font-bold border ${
+                user.role === "OWNER"
+                  ? "bg-zinc-100 text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+                : user.displayRole === "High Council" 
+                  ? "bg-purple-500/20 text-purple-400 border-purple-500/20" 
+                  : user.role === "SUPER_ADMIN"
+                  ? "bg-amber-500/20 text-amber-400 border-amber-500/20"
+                  : user.role === "ADMIN"
+                  ? "bg-red-500/20 text-red-400 border-red-500/20"
+                  : "bg-gray-800 text-gray-400 border-gray-700"
+              }`}>
+                {user.displayRole}
               </div>
             </div>
           </div>

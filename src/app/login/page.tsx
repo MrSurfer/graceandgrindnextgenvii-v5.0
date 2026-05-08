@@ -31,7 +31,9 @@ function LoginForm() {
         return;
       }
 
-      if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") {
+      if (userRole === "OWNER") {
+        router.push("/owner");
+      } else if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") {
         router.push("/admin");
       } else if (userRole === "TEACHER") {
         router.push("/dashboard/teacher");

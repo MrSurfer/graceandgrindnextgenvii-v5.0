@@ -50,8 +50,9 @@ export default function RegisterPage() {
       setError(data.error || "Something went wrong.");
     } else {
       setIsSuccess(true);
+      // Wait for the animation/onboarding message to show for 3 seconds
       setTimeout(() => {
-        router.push("/login?registered=true");
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
       }, 3000);
     }
   }

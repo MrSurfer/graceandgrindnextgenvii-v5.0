@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { PlayCircle, Lock, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import EnrollButton from "@/components/EnrollButton";
 
 import { Metadata } from "next";
 
@@ -129,12 +130,12 @@ export default async function CourseDetailPage({ params }: Props) {
             <h2 className="font-bold text-xl mb-1">Enroll to unlock all sessions</h2>
             <p className="text-gray-400 text-sm">Get full access to all {lessons.length} sessions.</p>
           </div>
-          <Link
-            href={session ? `/api/checkout/${course.id}` : `/login?callbackUrl=/courses/${course.slug}`}
-            className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-lg transition-colors whitespace-nowrap"
-          >
-            {session ? (course.price === 0 ? "Enroll Free" : `Enroll for $${course.price}`) : "Login to Enroll"}
-          </Link>
+          <EnrollButton
+            courseId={course.id}
+            courseSlug={course.slug}
+            price={course.price}
+            isLoggedIn={!!session}
+          />
         </div>
       )}
 

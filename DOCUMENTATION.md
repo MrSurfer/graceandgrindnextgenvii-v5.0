@@ -2,11 +2,25 @@
 
 Welcome to the GraceAndGrindNextGenV2 project documentation. This document outlines the project's architecture, database schema, and detailed explanations of how the core system logic works.
 
-## 1. Project Overview & Architecture
+## 1. Project Overview & Strategic Framework
 
-# GraceAndGrind: Raising the Next Generation
+# GraceAndGrind: Equipping the Habesha Diaspora
 
-GraceAndGrind is a premium, high-performance education platform dedicated to **intentional parenting excellence**. It provides parents with transformative courses, community discussions, and resources to raise children with purpose, grace, and grind.
+GraceAndGrind is a premium, high-performance education and resource platform dedicated to the **Habesha diaspora** (Ethiopian and Eritrean families). It provides parents with transformative courses, community discussions, and critical resources to thrive across generations while honoring their cultural heritage.
+
+### 🌟 Vision
+To be the most trusted and comprehensive learning and resource platform for the Habesha diaspora; a digital home where every Ethiopian and Eritrean family can access the tools, knowledge, and community they need to thrive.
+
+### 🎯 Mission
+Grace & Grind NextGen exists to equip Habesha parents with practical, faith-informed tools; empower the next generation with identity and life skills; and build a sustainable platform that serves as a lasting community institution.
+
+### 💎 Core Values
+- **Community First**: Decisions are driven by genuine community service.
+- **Cultural Integrity**: Honoring Habesha culture, language, and faith.
+- **Practical Wisdom**: Actionable knowledge grounded in faith-based values.
+- **Generational Thinking**: Measuring success by long-term impact on families.
+- **Quality Without Compromise**: Delivering only exceptional, high-end content.
+- **Radical Accessibility**: Ensuring critical community resources are free.
 
 ### Tech Stack
 - **Framework:** Next.js (App Router)
@@ -27,28 +41,37 @@ GraceAndGrind is a premium, high-performance education platform dedicated to **i
 The application uses NextAuth.js configured in `src/lib/auth.ts`.
 - **Providers:** Google, GitHub, and Credentials (Email/Password).
 - **Session Strategy:** JWT (JSON Web Tokens).
-- **Role Management:** Users are assigned roles (`CUSTOMER`, `TEACHER`, `ADMIN`, `SUPER_ADMIN`). When logging in via OAuth or Credentials, the role is fetched from the Prisma database and injected into the JWT token and session object. This ensures role-based access control (RBAC) across the platform without requiring a database query on every request.
-- **Super Admin "Double-Lock" Security:** For high-risk operations (Emergency Program Deletion, Instant Account Forging), the system requires a "Double-Lock" verification. This means the user must have the `SUPER_ADMIN` role in the database **AND** their email must be present in the hardcoded `SUPER_ADMIN_EMAILS` whitelist in the `.env` file. This prevents unauthorized escalation even if the database is compromised.
-- **Account Status:** The system enforces account status checks (`ACTIVE` vs `BLOCKED`). Blocked users are prevented from authenticating.
+- **Role Management:** Users are assigned roles (`CUSTOMER`, `TEACHER`, `ADMIN`, `SUPER_ADMIN`, `OWNER`).
+- **Authorization Hierarchy:** The platform enforces a 5-tier vertical hierarchy:
+  - **Level 5: OWNER** — Master authority via `OWNER_EMAILS` whitelist. Access to CEO Command Hub.
+  - **Level 4: ROOT** — Top-tier security and operations authority. Can manage Super Admins.
+  - **Level 3: SUPER_ADMIN** — Database-level administrative access.
+  - **Level 2: ADMIN** — Standard operational moderation.
+  - **Level 1: TEACHER** — Educational content creators.
+  - **Level 0: CUSTOMER/STUDENT** — Standard users.
+- **Identity Verification (OTP):** To prevent bot registrations and ensure real user identity, the system requires a **6-digit One-Time Password (OTP)** for all new email/password registrations. Login is blocked until the `emailVerified` flag is set in the database. Social logins (Google/GitHub) bypass this as they are pre-verified.
+- **OTP Password Reset:** Account recovery has been hardened to use 6-digit codes (15-minute expiration) instead of static links, providing a more secure and time-sensitive reset process.
 - **Role-Based Redirection:** Upon successful login, users are redirected based on their role:
-  - **ADMIN:** Redirected to `/admin`.
+  - **OWNER:** Redirected to `/owner` (CEO Hub).
+  - **ROOT / SUPER_ADMIN / ADMIN:** Redirected to `/admin`.
   - **TEACHER:** Redirected to `/dashboard/teacher`.
   - **CUSTOMER/STUDENT:** Redirected to `/courses`.
   This logic is implemented in `src/app/login/page.tsx` and protected by middleware in `src/proxy.ts`.
 
 ### Purchasing & Enrollment Logic
-Course purchases and enrollments are handled securely via Stripe and custom API routes.
+Course purchases and enrollments are handled securely via Stripe and custom Server Actions for high-performance feedback.
+- **Enrollment Component (`src/components/EnrollButton.tsx`):** A client-side component that handles the conditional logic for free vs. paid programs.
+  - **Free Programs:** Utilizes the `enrollInFreeCourse` Server Action. This provides instant UI feedback via toasts and `router.refresh()`, eliminating the need for manual page reloads.
+  - **Paid Programs:** Redirects the user to the `src/app/api/checkout/[courseId]/route.ts` endpoint for Stripe processing.
 - **Checkout Route (`src/app/api/checkout/[courseId]/route.ts`):** 
   - If a user is not authenticated, they are redirected to login with a callback URL.
   - If the user is already enrolled, they are redirected directly to the course page.
-  - **Free Courses:** If the course price is `0`, the system bypasses Stripe, creates an `Enrollment` record in the database directly, and redirects the user to the course.
-  - **Paid Courses:** Creates a Stripe Checkout Session with the course details and metadata (e.g., `courseId`, `userId`). The user is redirected to the secure Stripe payment page.
+  - **Free Courses (API Fallback):** If accessed directly, the route creates an `Enrollment` record, revalidates relevant paths, and redirects back to the program with an `?enrolled=true` flag.
+  - **Paid Courses:** Creates a Stripe Checkout Session with course metadata.
 - **Stripe Webhook (`src/app/api/webhooks/stripe/route.ts`):**
-  - Listens for the `checkout.session.completed` event from Stripe.
-  - Verifies the signature securely using the `STRIPE_WEBHOOK_SECRET`.
-  - Extracts the `userId` and `courseId` from the session metadata.
-  - Performs an `upsert` on the `Enrollment` table to grant the user access, ensuring idempotency (if the webhook fires multiple times, it won't crash).
-  - Revalidates Next.js cache paths so the UI immediately reflects the newly purchased course.
+  - Listens for `checkout.session.completed`.
+  - Performs an `upsert` on the `Enrollment` table for idempotency.
+  - Revalidates Next.js cache paths and sends a "Mastery Confirmed" email via Resend.
 
 ### Admin & Teacher Operations Logic
 System administration and content management utilize Next.js Server Actions.
@@ -88,7 +111,8 @@ The platform uses **Resend** for sending automated emails to users.
 
 The database utilizes Prisma and includes the following key models:
 
-- **User:** Stores authentication details, roles (`CUSTOMER`, `TEACHER`, `ADMIN`, `SUPER_ADMIN`), and account status. Expanded to include professional identity fields: `bio`, `website`, and social handles (`twitter`, `instagram`, `linkedin`).
+- **User:** Stores authentication details, roles (`CUSTOMER`, `TEACHER`, `ADMIN`, `SUPER_ADMIN`, `OWNER`), account status, and `emailVerified` timestamp. 
+- **VerificationCode:** Stores 6-digit OTP codes for email verification with 15-minute expiration.
 - **Course:** Represents a learning module. Contains pricing, publishing status, and relations to the teacher and enrolled students.
 - **Lesson:** Individual learning units within a Course. Includes content, video URLs, ordering, and free-preview flags.
 - **Enrollment:** The join table granting a User access to a Course. Includes the `stripePaymentId` for tracking.
@@ -96,6 +120,8 @@ The database utilizes Prisma and includes the following key models:
 - **ContentRequest:** A moderation queue for course modifications, allowing admins to vet teacher changes before they go live.
 - **LessonProgress:** Tracks which lessons a user has completed.
 - **Comment:** Allows users to discuss specific lessons.
+- **PasswordResetToken:** Manages 6-digit OTP codes for account recovery.
+- **EventLog:** Immutable audit trail for tracking administrative actions (Role Changes, Blocks, User Deletions, Account Forging).
 
 ---
 

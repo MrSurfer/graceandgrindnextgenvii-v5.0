@@ -10,7 +10,7 @@ export default async function TeacherDashboard() {
   if (!session?.user?.id) redirect("/login");
 
   const role = (session.user as any).role;
-  if (role !== "TEACHER" && role !== "ADMIN" && role !== "SUPER_ADMIN") redirect("/");
+  if (role !== "TEACHER" && role !== "ADMIN" && role !== "SUPER_ADMIN" && role !== "OWNER") redirect("/");
 
   const [courses, enrollments, requests] = await Promise.all([
     prisma.course.findMany({

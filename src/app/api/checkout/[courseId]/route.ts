@@ -34,7 +34,15 @@ export async function GET(
     await prisma.enrollment.create({
       data: { userId: session.user.id, courseId },
     });
-    return NextResponse.redirect(new URL(`/courses/${course.slug}`, req.url));
+    
+    // Ensure the cache is invalidated for the course page and others
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath(`/courses/${course.slug}`);
+    revalidatePath(`/courses`);
+    revalidatePath(`/profile`);
+    revalidatePath(`/`);
+
+    return NextResponse.redirect(new URL(`/courses/${course.slug}?enrolled=true`, req.url));
   }
 
   // Get the base URL directly from the current request URL (most reliable)

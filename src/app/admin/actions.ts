@@ -5,61 +5,66 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/mail";
 import bcrypt from "bcryptjs";
+import { logAdminEvent } from "@/lib/audit";
 
 /**
  * HIERARCHY SOURCE OF TRUTH
- * The whitelist is the ultimate authority.
  */
-async function isSuperUser(session: any) {
-  if (!session?.user?.email) return false;
-  const whitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
-  return whitelist.includes(session.user.email);
+async function getAuthorityLevel(user: { email: string; role: string }) {
+  const ownerEmails = (process.env.OWNER_EMAILS || "").split(",");
+  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
+  
+  if (!user) return 0;
+  if (ownerEmails.includes(user.email) || user.role === "OWNER") return 5;
+  if (user.role === "ROOT" || superAdminEmails.includes(user.email)) return 4;
+  if (user.role === "SUPER_ADMIN") return 3;
+  if (user.role === "ADMIN") return 2;
+  if (user.role === "TEACHER") return 1;
+  return 0;
 }
 
 export async function updateUserRole(userId: string, newRole: string) {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
+    if (!session?.user?.id) return { error: "Unauthorized" };
 
-    if (!session?.user?.id || (!isAdmin && !isSuper)) {
-      return { error: "Unauthorized" };
-    }
-
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     const targetUser = await prisma.user.findUnique({ where: { id: userId } });
-    if (!targetUser) return { error: "User not found" };
+
+    if (!currentUser || !targetUser) return { error: "User not found" };
+
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
+    const newRoleLevel = await getAuthorityLevel({ email: "", role: newRole });
 
     // 🛡️ HIERARCHY LOCKS
     
-    // 1. Super Admin is untouchable by anyone else
-    if (targetUser.role === "SUPER_ADMIN" && !isSuper) {
-      return { error: "Access Denied: You cannot modify a High Council member." };
+    // 1. Peer-to-Peer & Vertical Block: You cannot modify someone at your level or higher
+    if (currentLevel <= targetLevel && currentUser.id !== userId) {
+      return { error: `Access Denied: You do not have authority over this ${targetUser.role} account.` };
     }
 
-    // 2. Peer-to-Peer & Vertical Lock for standard Admins
-    if (!isSuper) {
-      // Admins cannot modify other Admins
-      if (targetUser.role === "ADMIN" && userId !== session.user.id) {
-        return { error: "Access Denied: You cannot modify another Admin account." };
-      }
-      // Admins cannot promote anyone to ADMIN or SUPER_ADMIN
-      if (newRole === "ADMIN" || newRole === "SUPER_ADMIN") {
-        return { error: "Access Denied: Only the High Council can appoint new leadership roles." };
-      }
+    // 2. Promotion Lock: Only ROOT (Level 4) or Owner (Level 5) can appoint ADMINs or above
+    if (newRoleLevel >= 2 && currentLevel < 4) {
+      return { error: "Access Denied: Only ROOT or OWNER can appoint leadership roles." };
     }
 
-    // Protection for last remaining admin
-    if (newRole !== "ADMIN") {
+    if (newRoleLevel >= currentLevel && currentUser.role !== "OWNER" && !process.env.OWNER_EMAILS?.includes(currentUser.email)) {
+      return { error: `Access Denied: You cannot assign a role equal to or higher than your own.` };
+    }
+
+    // 3. Self-Demotion Lock: Cannot demote the last remaining admin
+    if (targetUser.role === "ADMIN" && newRole !== "ADMIN") {
       const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
-      if (targetUser.role === "ADMIN" && adminCount <= 1) {
-        return { error: "Cannot demote the last remaining admin." };
-      }
+      if (adminCount <= 1) return { error: "Cannot demote the last remaining admin." };
     }
 
     await prisma.user.update({
       where: { id: userId },
       data: { role: newRole },
     });
+
+    await logAdminEvent(currentUser.id, "ROLE_CHANGE", userId, { oldRole: targetUser.role, newRole });
 
     revalidatePath("/admin");
     return { success: true, message: `User role updated to ${newRole}` };
@@ -71,47 +76,36 @@ export async function updateUserRole(userId: string, newRole: string) {
 export async function deleteUser(userId: string, adminPassword?: string) {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
+    if (!session?.user?.id) return { error: "Unauthorized" };
 
-    if (!session?.user?.id || (!isAdmin && !isSuper)) {
-      return { error: "Unauthorized" };
-    }
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!currentUser || !targetUser) return { error: "User not found" };
 
     if (!adminPassword) return { error: "Administrator password is required for purge operations." };
 
-    const admin = await prisma.user.findUnique({ where: { id: session.user.id } });
-    if (!admin || !admin.password) return { error: "Admin authentication failure." };
-
-    const isValid = await bcrypt.compare(adminPassword, admin.password);
+    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
     if (!isValid) return { error: "Incorrect administrator password. Deletion aborted." };
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return { error: "User not found" };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
 
     // 🛡️ HIERARCHY LOCKS
-    if (user.role === "SUPER_ADMIN" && !isSuper) {
-      return { error: "Access Denied: High Council members cannot be purged." };
+    if (currentLevel <= targetLevel && currentUser.id !== userId) {
+      return { error: "Access Denied: You cannot purge an account at your level or higher." };
     }
 
-    if (!isSuper && user.role === "ADMIN" && userId !== session.user.id) {
-      return { error: "Access Denied: You cannot delete another Admin account." };
-    }
+    if (userId === currentUser.id) return { error: "You cannot delete your own account." };
 
-    if (userId === session.user.id) {
-      return { error: "You cannot delete your own account." };
-    }
-
-    if (user?.role === "ADMIN") {
+    if (targetUser.role === "ADMIN") {
       const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
-      if (adminCount <= 1) {
-        return { error: "Cannot delete the last remaining admin." };
-      }
+      if (adminCount <= 1) return { error: "Cannot delete the last remaining admin." };
     }
 
-    await prisma.user.delete({
-      where: { id: userId },
-    });
+    await prisma.user.delete({ where: { id: userId } });
+
+    await logAdminEvent(currentUser.id, "USER_DELETE", userId, { email: targetUser.email, role: targetUser.role });
 
     revalidatePath("/admin");
     return { success: true, message: "User deleted successfully" };
@@ -123,26 +117,22 @@ export async function deleteUser(userId: string, adminPassword?: string) {
 export async function updateUserStatus(userId: string, newStatus: string) {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
+    if (!session?.user?.id) return { error: "Unauthorized" };
 
-    if (!session?.user?.id || (!isAdmin && !isSuper)) {
-      return { error: "Unauthorized" };
-    }
-
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     const targetUser = await prisma.user.findUnique({ where: { id: userId } });
-    if (!targetUser) return { error: "User not found" };
+
+    if (!currentUser || !targetUser) return { error: "User not found" };
+
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
 
     // 🛡️ HIERARCHY LOCKS
-    if (targetUser.role === "SUPER_ADMIN" && !isSuper) {
-      return { error: "Access Denied: High Council members cannot be blocked." };
+    if (currentLevel <= targetLevel && currentUser.id !== userId) {
+      return { error: "Access Denied: High Council members and Peers cannot be blocked." };
     }
 
-    if (!isSuper && targetUser.role === "ADMIN" && userId !== session.user.id) {
-      return { error: "Access Denied: You cannot block another Admin account." };
-    }
-
-    if (userId === session.user.id && newStatus === "BLOCKED") {
+    if (userId === currentUser.id && newStatus === "BLOCKED") {
       return { error: "You cannot block your own account." };
     }
 
@@ -151,6 +141,8 @@ export async function updateUserStatus(userId: string, newStatus: string) {
       data: { status: newStatus },
     });
 
+    await logAdminEvent(currentUser.id, "STATUS_CHANGE", userId, { oldStatus: targetUser.status, newStatus });
+
     revalidatePath("/admin");
     return { success: true, message: `User status updated to ${newStatus}` };
   } catch (err: any) {
@@ -158,20 +150,20 @@ export async function updateUserStatus(userId: string, newStatus: string) {
   }
 }
 
-// ... (rest of the file remains unchanged and hierarchical)
 export async function deleteCourse(courseId: string, force: boolean = false, adminPassword?: string) {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
-    if (!session?.user?.id || (!isAdmin && !isSuper)) return { error: "Unauthorized" };
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "Admin not found." };
+
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    if (currentLevel < 2) return { error: "Unauthorized" };
 
     if (!adminPassword) return { error: "Administrator password is required for destructive operations." };
 
-    const admin = await prisma.user.findUnique({ where: { id: session.user.id } });
-    if (!admin || !admin.password) return { error: "Admin authentication failure." };
-
-    const isValid = await bcrypt.compare(adminPassword, admin.password);
+    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
     if (!isValid) return { error: "Incorrect administrator password. Deletion aborted." };
 
     const course = await prisma.course.findUnique({
@@ -179,9 +171,12 @@ export async function deleteCourse(courseId: string, force: boolean = false, adm
       include: { _count: { select: { enrollments: true } } }
     });
     if (!course) return { error: "Course not found" };
-    if (course._count.enrollments > 0 && !force) {
-      return { error: "Cannot delete course with active enrollments. Use Super Admin override." };
+
+    // Only High Council (Level 4) can force delete with enrollments
+    if (course._count.enrollments > 0 && currentLevel < 4) {
+      return { error: "Cannot delete course with active enrollments. High Council override required." };
     }
+
     await prisma.course.delete({ where: { id: courseId } });
     revalidatePath("/admin");
     revalidatePath("/courses");
@@ -192,9 +187,13 @@ export async function deleteCourse(courseId: string, force: boolean = false, adm
 export async function reviewTeacherApplication(applicationId: string, status: "APPROVED" | "REJECTED") {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
-    if (!session?.user?.id || (!isAdmin && !isSuper)) return { error: "Unauthorized" };
+    if (!session?.user?.id) return { error: "Unauthorized" };
+    
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "Admin not found." };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    if (currentLevel < 2) return { error: "Unauthorized" };
+
     const application = await prisma.teacherApplication.findUnique({
       where: { id: applicationId },
       include: { user: { select: { email: true, name: true } } }
@@ -217,9 +216,12 @@ export async function reviewContentRequest(
 ) {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
-    if (!session?.user?.id || (!isAdmin && !isSuper)) return { error: "Unauthorized" };
+    if (!session?.user?.id) return { error: "Unauthorized" };
+    
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "Admin not found." };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    if (currentLevel < 2) return { error: "Unauthorized" };
 
     const request = await prisma.contentRequest.findUnique({
       where: { id: requestId },
@@ -228,14 +230,11 @@ export async function reviewContentRequest(
     if (!request) return { error: "Request not found." };
 
     if (status === "APPROVED") {
-      // Custom Grace period only for explicit EDIT requests. 
-      // PUBLISH/NEW_LESSON results in an immediate LOCK.
       const gracePeriod = request.type === "EDIT" 
         ? new Date(Date.now() + customGracePeriodMinutes * 60 * 1000) 
         : null;
 
       if (request.lessonId) {
-        // Lesson-level request
         if (request.type === "PUBLISH" || request.type === "EDIT" || request.type === "NEW_LESSON") {
           const updateData: any = {
             status: "PUBLISHED",
@@ -260,11 +259,10 @@ export async function reviewContentRequest(
           });
         }
       } else if (request.courseId) {
-        // Course-level request
         if (request.type === "PUBLISH" || request.type === "EDIT") {
           const updateData: any = {
             status: "PUBLISHED",
-            published: true, // Legacy compatibility
+            published: true, 
             approvedUntil: gracePeriod,
           };
 
@@ -286,7 +284,6 @@ export async function reviewContentRequest(
         }
       }
     } else if (status === "REJECTED") {
-      // Revert status to REJECTED so teacher can fix and re-apply
       if (request.lessonId) {
         await prisma.lesson.update({
           where: { id: request.lessonId },
@@ -327,9 +324,13 @@ export async function reviewContentRequest(
 export async function manualAssignCourse(userId: string, courseId: string) {
   try {
     const session = await auth();
-    const isSuper = await isSuperUser(session);
-    const isAdmin = (session?.user as any)?.role === "ADMIN";
-    if (!session?.user?.id || (!isAdmin && !isSuper)) return { error: "Unauthorized" };
+    if (!session?.user?.id) return { error: "Unauthorized" };
+    
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "Admin not found." };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    if (currentLevel < 2) return { error: "Unauthorized" };
+
     await prisma.enrollment.create({ data: { userId, courseId } });
     revalidatePath("/admin");
     return { success: true, message: "Course assigned successfully" };
@@ -339,20 +340,30 @@ export async function manualAssignCourse(userId: string, courseId: string) {
 export async function forgeAccount(data: { email: string; name: string; role: string; password?: string }) {
   try {
     const session = await auth();
-    if (!await isSuperUser(session)) return { error: "Access Denied: Super Admin Double-Lock required." };
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "Admin not found." };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+
+    // Double-Lock: Forge requires Whitelist (Level 4)
+    if (currentLevel < 4) return { error: "Access Denied: Super Admin Double-Lock required for Forge." };
     
     const actualPassword = data.password || Math.random().toString(36).slice(-10);
     const hashedPassword = await bcrypt.hash(actualPassword, 10);
     
-    await prisma.user.create({
+    const newUser = await prisma.user.create({
       data: { 
         email: data.email, 
         name: data.name, 
         role: data.role, 
         password: hashedPassword, 
-        status: "ACTIVE" 
+        status: "ACTIVE",
+        emailVerified: new Date()
       }
     });
+
+    await logAdminEvent(currentUser.id, "FORGE_ACCOUNT", newUser.id, { email: data.email, role: data.role });
     
     revalidatePath("/admin");
     return { 

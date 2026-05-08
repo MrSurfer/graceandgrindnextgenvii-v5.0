@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Zap, Mail, ArrowRight, Loader2, CheckCircle } from "lucide-react";
 import { requestPasswordReset } from "./actions";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -16,6 +18,9 @@ export default function ForgotPasswordPage() {
     try {
       await requestPasswordReset(email);
       setSuccess(true);
+      setTimeout(() => {
+        router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+      }, 3000);
     } catch (e) {
       console.error(e);
       // We still show success for security to avoid email enumeration

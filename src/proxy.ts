@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const isLoggedIn = !!req.auth;
   const { nextUrl } = req;
 
@@ -18,12 +18,12 @@ export default auth((req) => {
     const userRole = (req.auth?.user as any)?.role;
 
     // Admin authorization
-    if (isAdminRoute && userRole !== "ADMIN" && userRole !== "SUPER_ADMIN") {
+    if (isAdminRoute && userRole !== "ADMIN" && userRole !== "SUPER_ADMIN" && userRole !== "OWNER") {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
-    // Teacher Route Protection (Includes Admin & Super Admin)
-    if (isTeacherRoute && userRole !== "TEACHER" && userRole !== "ADMIN" && userRole !== "SUPER_ADMIN") {
+    // Teacher Route Protection (Includes Admin, Super Admin & Owner)
+    if (isTeacherRoute && userRole !== "TEACHER" && userRole !== "ADMIN" && userRole !== "SUPER_ADMIN" && userRole !== "OWNER") {
       return NextResponse.redirect(new URL("/", nextUrl));
     }
   }

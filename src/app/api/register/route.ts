@@ -32,10 +32,44 @@ export async function POST(req: NextRequest) {
     
     // Auto-promote if email is in whitelist
     const superAdminEmails = process.env.SUPER_ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-    const role = superAdminEmails.includes(email) ? "SUPER_ADMIN" : "CUSTOMER";
+    const ownerEmails = process.env.OWNER_EMAILS?.split(",").map(e => e.trim()) || [];
+    
+    let role = "CUSTOMER";
+    if (ownerEmails.includes(email)) role = "OWNER";
+    else if (superAdminEmails.includes(email)) role = "SUPER_ADMIN";
 
     const user = await prisma.user.create({
       data: { name, email, password: hashed, role },
+    });
+
+    // --- EMAIL VERIFICATION LOGIC ---
+    // Generate 6-digit code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await prisma.verificationCode.upsert({
+      where: { email },
+      update: { code: otpCode, expires },
+      create: { email, code: otpCode, expires },
+    });
+
+    // Import sendEmail from lib/mail
+    const { sendEmail } = require("@/lib/mail");
+    await sendEmail({
+      to: email,
+      subject: "Verify your Grace & Grind Account",
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #000; color: #fff;">
+          <h1 style="color: #f59e0b; text-align: center;">Welcome to the Mastery!</h1>
+          <p style="font-size: 16px; line-height: 1.5;">Hi ${name},</p>
+          <p style="font-size: 16px; line-height: 1.5;">Thank you for joining Grace & Grind. To finalize your account, please enter the following 6-digit verification code:</p>
+          <div style="background-color: #1a1a1a; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 10px; color: #f59e0b;">${otpCode}</span>
+          </div>
+          <p style="font-size: 14px; color: #9ca3af; text-align: center;">This code will expire in 15 minutes.</p>
+          <p style="font-size: 14px; color: #9ca3af;">If you didn't create an account, you can safely ignore this email.</p>
+        </div>
+      `
     });
 
     return NextResponse.json({ success: true, userId: user.id }, { status: 201 });

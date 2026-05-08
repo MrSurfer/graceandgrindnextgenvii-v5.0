@@ -75,3 +75,31 @@ export async function deleteComment(commentId: string, courseSlug: string, lesso
     return { error: err.message || "Failed to delete comment" };
   }
 }
+
+export async function enrollInFreeCourse(courseId: string, courseSlug: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const userId = session.user.id;
+    
+    const course = await prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) return { error: "Course not found" };
+    if (course.price !== 0) return { error: "This course is not free" };
+
+    await prisma.enrollment.upsert({
+      where: { userId_courseId: { userId, courseId } },
+      create: { userId, courseId },
+      update: {},
+    });
+
+    revalidatePath(`/courses`);
+    revalidatePath(`/courses/${courseSlug}`);
+    revalidatePath(`/profile`);
+    revalidatePath(`/`);
+    
+    return { success: true, message: "Successfully enrolled in course" };
+  } catch (err: any) {
+    return { error: err.message || "Failed to enroll" };
+  }
+}

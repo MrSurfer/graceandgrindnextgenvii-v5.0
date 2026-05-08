@@ -29,12 +29,17 @@ export default function Navbar() {
 
         {session ? (
           <>
-            {(role === "TEACHER" || role === "ADMIN" || role === "SUPER_ADMIN") && (
+            {(role === "OWNER") && (
+              <Link href="/owner" className="flex items-center gap-1.5 text-amber-500 hover:text-amber-400 transition-colors">
+                <LayoutDashboard className="w-4 h-4" /> CEO Hub
+              </Link>
+            )}
+            {(role === "TEACHER" || role === "ADMIN" || role === "SUPER_ADMIN" || role === "OWNER") && (
               <Link href="/dashboard/teacher" className="flex items-center gap-1.5 hover:text-white transition-colors">
                 <LayoutDashboard className="w-4 h-4" /> Dashboard
               </Link>
             )}
-            {(role === "ADMIN" || role === "SUPER_ADMIN") && (
+            {(role === "ADMIN" || role === "SUPER_ADMIN" || role === "OWNER") && (
               <Link href="/admin" className="flex items-center gap-1.5 hover:text-amber-400 transition-colors">
                 <Shield className="w-4 h-4" /> Admin
               </Link>

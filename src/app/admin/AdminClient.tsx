@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, memo } from "react";
-import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings } from "lucide-react";
+import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search } from "lucide-react";
 import { toast } from "sonner";
 import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount } from "./actions";
 import { useRouter } from "next/navigation";
@@ -27,7 +27,9 @@ export default function AdminClient({
   contentRequests,
   currentUserId,
   superAdminEmails,
+  ownerEmails,
   isSuperAdmin,
+  currentLevel,
 }: {
   stats: { userCount: number; courseCount: number; enrollmentCount: number; totalRevenue: number };
   users: any[];
@@ -36,12 +38,15 @@ export default function AdminClient({
   contentRequests: any[];
   currentUserId: string;
   superAdminEmails: string[];
+  ownerEmails: string[];
   isSuperAdmin: boolean;
+  currentLevel: number;
 }) {
   const { data: session } = useSession();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge">("users");
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const PAGE_SIZE = 10;
   
@@ -64,35 +69,61 @@ export default function AdminClient({
   const [adminFeedback, setAdminFeedback] = useState("");
   const [gracePeriodMinutes, setGracePeriodMinutes] = useState(60);
 
+  const [localUsers, setLocalUsers] = useState(users);
+
   useEffect(() => {
     setIsMounted(true);
-    const interval = setInterval(() => {
-      router.refresh();
-      setLastUpdated(new Date());
-    }, 60000); // 1 minute
-    return () => clearInterval(interval);
-  }, [router]);
+    // Removed the disruptive 1-minute full page refresh interval.
+    // Actions now handle targeted revalidation.
+  }, []);
+
+  // Update local users when prop changes
+  useEffect(() => {
+    setLocalUsers(users);
+  }, [users]);
 
   useEffect(() => {
     setCurrentPage(1);
+    setSearchQuery("");
   }, [activeTab]);
 
-  // ... (previous functions)
   async function handleRoleChange(userId: string, newRole: string) {
-    setActionLoading(true);
-    setLoadingMessage("Updating User Role...");
+    // OPTIMISTIC UPDATE
+    const previousUsers = [...localUsers];
+    setLocalUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+    
     try {
       const res = await updateUserRole(userId, newRole);
       if (res.error) {
         toast.error(res.error);
+        setLocalUsers(previousUsers); // Rollback
       } else {
         toast.success(res.message);
         router.refresh();
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to update role");
-    } finally {
-      setActionLoading(false);
+      setLocalUsers(previousUsers); // Rollback
+    }
+  }
+
+  async function handleStatusChange(userId: string, newStatus: string) {
+    // OPTIMISTIC UPDATE
+    const previousUsers = [...localUsers];
+    setLocalUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+    
+    try {
+      const res = await updateUserStatus(userId, newStatus);
+      if (res.error) {
+        toast.error(res.error);
+        setLocalUsers(previousUsers); // Rollback
+      } else {
+        toast.success(res.message);
+        router.refresh();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update status");
+      setLocalUsers(previousUsers); // Rollback
     }
   }
 
@@ -237,6 +268,28 @@ export default function AdminClient({
     }
   }
 
+  const filteredUsers = localUsers.filter(u => 
+    (u.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) || 
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredCourses = courses.filter(c => 
+    c.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (c.teacher.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.teacher.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredCustomers = localUsers.filter(u => 
+    (u.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) || 
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredContentRequests = contentRequests.filter(req => 
+    req.course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (req.lesson?.title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    req.type.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <>
       <LoadingOverlay isVisible={actionLoading} message={loadingMessage} theme="blue" />
@@ -255,6 +308,15 @@ export default function AdminClient({
             </span>
           </p>
         </div>
+        {isSuperAdmin && (
+          <Link 
+            href="/owner/logs" 
+            className="flex items-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 px-4 py-2 rounded-xl transition-all"
+          >
+            <ShieldCheck className="w-4 h-4 text-purple-400" />
+            <span className="text-sm font-bold text-purple-400">Event Logs</span>
+          </Link>
+        )}
       </div>
 
 
@@ -321,6 +383,25 @@ export default function AdminClient({
         )}
       </div>
 
+      {/* Search Bar */}
+      {["users", "courses", "customers", "content"].includes(activeTab) && (
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+            <input
+              type="text"
+              placeholder={`Search ${activeTab}...`}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1); // Reset to page 1 on search
+              }}
+              className="w-full bg-gray-900/50 border border-gray-800 rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Tab Content */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-3xl overflow-hidden backdrop-blur-sm">
 
@@ -339,14 +420,32 @@ export default function AdminClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
-                  {users.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((user) => (
+                  {filteredUsers
+                    .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+                    .map((user) => {
+                    const targetLevel = (ownerEmails.includes(user.email) || user.role === "OWNER") ? 5 :
+                                        (superAdminEmails.includes(user.email)) ? 4 :
+                                        (user.role === "SUPER_ADMIN") ? 3 :
+                                        (user.role === "ADMIN") ? 2 :
+                                        (user.role === "TEACHER") ? 1 : 0;
+                    const canEdit = currentLevel > targetLevel;
+                    const isHighLevel = targetLevel >= 3;
+
+                    return (
                     <tr key={user.id} className="hover:bg-gray-800/40 transition-colors">
                       <td className="px-6 py-4 font-medium">{user.name || "—"}</td>
                       <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.email}</td>
                       <td className="px-6 py-4">
-                        {superAdminEmails.includes(user.email) ? (
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-purple-400 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/10">
-                            <ShieldCheck className="w-3 h-3" /> Super Admin
+                        {(!canEdit && isHighLevel) ? (
+                          <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border ${
+                            targetLevel === 5
+                              ? "text-black bg-white border-white shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+                              : targetLevel === 4 
+                              ? "text-purple-400 bg-purple-500/10 border-purple-500/10" 
+                              : "text-amber-400 bg-amber-500/10 border-amber-500/10"
+                          }`}>
+                            <ShieldCheck className="w-3 h-3" /> 
+                            {targetLevel === 5 ? "OWNER" : targetLevel === 4 ? "ROOT" : "Super Admin"}
                           </div>
                         ) : (
                           <select
@@ -355,12 +454,16 @@ export default function AdminClient({
                             disabled={loadingId === user.id}
                             className={`text-xs font-bold px-3 py-1.5 rounded-full bg-gray-800 border-none outline-none cursor-pointer ${
                               user.role === "ADMIN" ? "text-red-400" :
-                              user.role === "TEACHER" ? "text-blue-400" : "text-gray-400"
+                              user.role === "TEACHER" ? "text-blue-400" :
+                              user.role === "SUPER_ADMIN" ? "text-purple-400" :
+                              user.role === "ROOT" ? "text-purple-500" : "text-gray-400"
                             }`}
                           >
                             <option value="CUSTOMER" className="text-gray-400">CUSTOMER</option>
                             <option value="TEACHER" className="text-blue-400">TEACHER</option>
                             <option value="ADMIN" className="text-red-400">ADMIN</option>
+                            {currentLevel >= 4 && <option value="SUPER_ADMIN" className="text-purple-400">SUPER ADMIN</option>}
+                            {currentLevel >= 5 && <option value="ROOT" className="text-purple-500 font-bold">ROOT</option>}
                           </select>
                         )}
                       </td>
@@ -372,35 +475,25 @@ export default function AdminClient({
                           <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-amber-500 font-bold px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
                             <AlertTriangle className="w-3 h-3" /> Current User
                           </span>
-                        ) : superAdminEmails.includes(user.email) ? (
+                        ) : (!canEdit && isHighLevel) ? (
                           <div className="flex items-center justify-end gap-2 pr-2">
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full">
-                              <ShieldCheck className="w-3 h-3 text-purple-400" />
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400">
-                                High Council
+                            <div className={`flex items-center gap-1.5 px-3 py-1 border rounded-full ${
+                              targetLevel === 5
+                                ? "bg-white text-black border-white"
+                                : targetLevel === 4
+                                ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
+                                : "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                            }`}>
+                              <ShieldCheck className="w-3 h-3" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest">
+                                {targetLevel === 5 ? "OWNER" : targetLevel === 4 ? "ROOT" : "Super Admin"}
                               </span>
                             </div>
                           </div>
                         ) : (
                           <div className="flex justify-end gap-2">
                             <button
-                              onClick={async () => {
-                                setLoadingId(`status-${user.id}`);
-                                try {
-                                  const res = await updateUserStatus(user.id, user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE");
-                                  if (res.error) {
-                                    toast.error(res.error);
-                                  } else {
-                                    toast.success(res.message);
-                                    router.refresh();
-                                  }
-                                } catch (e: any) {
-                                  toast.error(e.message || "Failed to update status");
-                                } finally {
-                                  setLoadingId(null);
-                                }
-                              }}
-                              disabled={loadingId === `status-${user.id}`}
+                              onClick={() => handleStatusChange(user.id, user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE")}
                               className={`p-2 rounded-lg transition-colors ${
                                 user.status === "BLOCKED" 
                                   ? "text-green-500 hover:bg-green-500/10" 
@@ -408,9 +501,7 @@ export default function AdminClient({
                               }`}
                               title={user.status === "BLOCKED" ? "Unblock User" : "Block User"}
                             >
-                              {loadingId === `status-${user.id}` ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : user.status === "BLOCKED" ? (
+                              {user.status === "BLOCKED" ? (
                                 <CheckCircle className="w-4 h-4" />
                               ) : (
                                 <Ban className="w-4 h-4" />
@@ -428,13 +519,14 @@ export default function AdminClient({
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <Pagination
               currentPage={currentPage}
-              totalItems={users.length}
+              totalItems={filteredUsers.length}
               pageSize={PAGE_SIZE}
               onPageChange={setCurrentPage}
             />
@@ -525,7 +617,7 @@ export default function AdminClient({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
-                    {contentRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((req) => (
+                    {filteredContentRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((req) => (
                       <tr key={req.id} className="hover:bg-gray-800/40 transition-colors">
                         <td className="px-6 py-4">
                           <div className="font-medium text-gray-200">{req.course.title}</div>
@@ -592,7 +684,7 @@ export default function AdminClient({
             </div>
             <Pagination
               currentPage={currentPage}
-              totalItems={contentRequests.length}
+              totalItems={filteredContentRequests.length}
               pageSize={PAGE_SIZE}
               onPageChange={setCurrentPage}
             />
@@ -622,7 +714,7 @@ export default function AdminClient({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
-                    {courses.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((course) => (
+                    {filteredCourses.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((course) => (
                       <tr key={course.id} className="hover:bg-gray-800/40 transition-colors">
                         <td className="px-6 py-4 font-medium max-w-xs">
                           <Link href={`/courses/${course.slug}`} className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
@@ -673,7 +765,7 @@ export default function AdminClient({
             </div>
             <Pagination
               currentPage={currentPage}
-              totalItems={courses.length}
+              totalItems={filteredCourses.length}
               pageSize={PAGE_SIZE}
               onPageChange={setCurrentPage}
             />
@@ -761,7 +853,7 @@ export default function AdminClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
-                  {users.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((user) => {
+                  {filteredCustomers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((user) => {
                     const totalSpent = user.enrollments?.reduce((sum: number, e: any) => sum + (e.course?.price || 0), 0) || 0;
                     
                     return (
@@ -809,7 +901,7 @@ export default function AdminClient({
             </div>
             <Pagination
               currentPage={currentPage}
-              totalItems={users.length}
+              totalItems={filteredCustomers.length}
               pageSize={PAGE_SIZE}
               onPageChange={setCurrentPage}
             />
@@ -1151,10 +1243,11 @@ export default function AdminClient({
                   onChange={(e) => setForgeData({ ...forgeData, role: e.target.value })}
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-amber-500 focus:outline-none transition-colors appearance-none"
                 >
-                  <option value="USER">Parent (User)</option>
+                  <option value="USER">Customer</option>
                   <option value="TEACHER">Educator (Teacher)</option>
                   <option value="ADMIN">Administrator</option>
-                  <option value="SUPER_ADMIN">High Council (Super Admin)</option>
+                  {currentLevel >= 4 && <option value="SUPER_ADMIN">Super Admin</option>}
+                  {currentLevel >= 5 && <option value="ROOT">Root</option>}
                 </select>
               </div>
 

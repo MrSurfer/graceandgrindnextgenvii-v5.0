@@ -9,36 +9,42 @@ import { resetPassword } from "./actions";
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const token = searchParams.get("token");
+  const initialEmail = searchParams.get("email") || "";
   
+  const [email, setEmail] = useState(initialEmail);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  if (!token) {
-    return (
-      <div className="text-center">
-        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-          <AlertCircle className="w-8 h-8 text-red-500" />
-        </div>
-        <h1 className="text-2xl font-bold mb-2">Invalid Request</h1>
-        <p className="text-gray-400 mb-8">
-          The password reset link is missing a valid token.
-        </p>
-        <Link
-          href="/forgot-password"
-          className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors"
-        >
-          Request new link
-        </Link>
-      </div>
-    );
-  }
+  const handleOtpChange = (index: number, value: string) => {
+    if (value.length > 1) value = value.slice(-1);
+    if (!/^\d*$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+
+    if (value && index < 5) {
+      document.getElementById(`otp-${index + 1}`)?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      document.getElementById(`otp-${index - 1}`)?.focus();
+    }
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const fullOtp = otp.join("");
+    if (fullOtp.length !== 6) {
+      setError("Please enter the 6-digit code.");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -51,11 +57,11 @@ function ResetPasswordForm() {
     setLoading(true);
     setError("");
     try {
-      await resetPassword(token!, password);
+      await resetPassword(fullOtp, password);
       setSuccess(true);
       setTimeout(() => router.push("/login"), 3000);
     } catch (e: any) {
-      setError(e.message || "Failed to reset password. The link may have expired.");
+      setError(e.message || "Failed to reset password. The code may be invalid or expired.");
     } finally {
       setLoading(false);
     }
@@ -78,9 +84,9 @@ function ResetPasswordForm() {
         </div>
       ) : (
         <>
-          <h1 className="text-2xl font-bold mb-2">Create new password</h1>
+          <h1 className="text-2xl font-bold mb-2">Reset your password</h1>
           <p className="text-gray-400 mb-8 text-sm">
-            Enter your new password below.
+            Enter the 6-digit code sent to your email and your new password.
           </p>
 
           {error && (
@@ -90,6 +96,25 @@ function ResetPasswordForm() {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2 mb-2">
+              <label className="text-sm font-medium text-gray-300">Verification Code</label>
+              <div className="flex justify-between gap-2">
+                {otp.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    id={`otp-${idx}`}
+                    type="text"
+                    inputMode="numeric"
+                    value={digit}
+                    onChange={(e) => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    className="w-full h-12 bg-gray-800 border border-gray-700 rounded-lg text-center text-lg font-bold text-white focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                ))}
+              </div>
+            </div>
+
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-300">New Password</label>
               <div className="relative">

@@ -3,6 +3,7 @@ import { Inter, Fira_Code } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 import Navbar from "@/components/Navbar";
+import InactivityHandler from "@/components/InactivityHandler";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const firaCode = Fira_Code({ subsets: ["latin"], variable: "--font-fira" });
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-gray-950 text-gray-100 font-sans antialiased flex flex-col">
         <Providers>
           <Navbar />
+          <InactivityHandler />
           <main className="flex-grow pt-16">
             {children}
           </main>

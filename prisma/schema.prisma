@@ -18,6 +18,7 @@ model User {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   status         String              @default("ACTIVE")
+  emailVerified  DateTime?
   bio            String?             @db.Text
   website        String?
   twitter        String?
@@ -29,6 +30,7 @@ model User {
   progress       LessonProgress[]
   resetTokens    PasswordResetToken?
   teacherApp     TeacherApplication?
+  actorLogs      EventLog[]          @relation("ActorLogs")
 }
 
 model TeacherApplication {
@@ -147,4 +149,21 @@ model RateLimit {
   updatedAt DateTime @updatedAt
 
   @@index([key])
+}
+model VerificationCode {
+  id        String   @id @default(uuid())
+  code      String
+  email     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+}
+
+model EventLog {
+  id        String   @id @default(uuid())
+  action    String
+  actorId   String
+  targetId  String?
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+  actor     User     @relation("ActorLogs", fields: [actorId], references: [id], onDelete: Cascade)
 }

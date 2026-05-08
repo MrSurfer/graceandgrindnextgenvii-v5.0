@@ -16,9 +16,9 @@ export async function requestPasswordReset(email: string) {
     return { success: true };
   }
 
-  // Generate a token
-  const token = uuidv4();
-  const expires = new Date(Date.now() + 3600 * 1000); // 1 hour from now
+  // Generate a 6-digit OTP
+  const token = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
   // Store token in DB
   await prisma.passwordResetToken.upsert({
@@ -34,12 +34,14 @@ export async function requestPasswordReset(email: string) {
     to: email,
     subject: "Reset your GraceAndGrind password",
     html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 12px;">
-        <h1 style="color: #f59e0b;">Password Reset Request</h1>
-        <p>Hi,</p>
-        <p>You requested a password reset for your GraceAndGrind account. Click the button below to set a new password. This link will expire in 1 hour.</p>
-        <a href="${resetLink}" style="display: inline-block; background-color: #f59e0b; color: #000; font-weight: bold; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin-top: 20px;">Reset Password</a>
-        <p style="margin-top: 30px; color: #6b7280; font-size: 0.875rem;">If you didn't request this, you can safely ignore this email.</p>
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #000; color: #fff;">
+        <h1 style="color: #f59e0b; text-align: center;">Password Reset Request</h1>
+        <p style="font-size: 16px; line-height: 1.5;">You requested a password reset for your GraceAndGrind account. Enter the following 6-digit code on the reset page:</p>
+        <div style="background-color: #1a1a1a; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 10px; color: #f59e0b;">${token}</span>
+        </div>
+        <p style="font-size: 14px; color: #9ca3af; text-align: center;">This code will expire in 15 minutes.</p>
+        <p style="font-size: 14px; color: #9ca3af;">If you didn't request this, you can safely ignore this email.</p>
       </div>
     `
   });

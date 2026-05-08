@@ -1,0 +1,22 @@
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const prisma = new PrismaClient();
+
+async function setPassword() {
+  const email = 'mys.test25@gmail.com';
+  const pass = 'Grace@2026';
+  try {
+    const hashedPassword = await bcrypt.hash(pass, 10);
+    await prisma.user.update({
+      where: { email },
+      data: { password: hashedPassword }
+    });
+    console.log(`Password set for ${email} to Grace@2026`);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+setPassword();

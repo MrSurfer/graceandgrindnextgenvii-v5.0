@@ -12,7 +12,7 @@ export async function resetPassword(token: string, password: string) {
   });
 
   if (!resetToken || resetToken.expires < new Date()) {
-    throw new Error("Invalid or expired reset token.");
+    throw new Error("Invalid or expired verification code.");
   }
 
   // Hash new password

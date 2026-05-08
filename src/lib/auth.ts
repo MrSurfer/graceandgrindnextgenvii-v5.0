@@ -27,10 +27,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!user || !user.password) return null;
         if (user.status === "BLOCKED") throw new Error("Account is blocked.");
+        if (!user.emailVerified) throw new Error("Please verify your email before logging in.");
 
         const isValid = await bcrypt.compare(
           credentials.password as string,
-          user.password
+          user.password as string
         );
 
         if (!isValid) return null;
@@ -58,6 +59,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               name: user.name,
               image: user.image, // Sync profile picture from provider
               role: "CUSTOMER",
+              emailVerified: new Date(), // OAuth is pre-verified
             }
           });
         } else if (!dbUser.image && user.image) {
@@ -68,22 +70,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
         }
         
-        if (dbUser.status === "BLOCKED") return false;
+        if (!dbUser || dbUser.status === "BLOCKED") return false;
         
         // Attach db properties to the user object so jwt callback can use them
         (user as any).id = dbUser.id;
         (user as any).role = dbUser.role;
       }
       if (user?.email) {
-        const whitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
-        if (whitelist.includes(user.email)) {
-          // FORCE sync database role to SUPER_ADMIN if whitelisted
+        const ownerWhitelist = (process.env.OWNER_EMAILS || "").split(",");
+        const superAdminWhitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
+
+        let targetRole = "";
+        if (ownerWhitelist.includes(user.email)) {
+          targetRole = "OWNER";
+        } else if (superAdminWhitelist.includes(user.email)) {
+          targetRole = "SUPER_ADMIN";
+        }
+
+        if (targetRole) {
           const dbUser = await prisma.user.findUnique({ where: { email: user.email } });
-          if (dbUser && dbUser.role !== "SUPER_ADMIN") {
+          if (dbUser && dbUser.role !== targetRole) {
             await prisma.user.update({
               where: { email: user.email },
-              data: { role: "SUPER_ADMIN" }
+              data: { role: targetRole }
             });
+            // Also update the object in the current closure
+            (user as any).role = targetRole;
           }
         }
       }

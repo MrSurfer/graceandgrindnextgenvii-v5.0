@@ -44,6 +44,9 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
+  const whitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
+  const isHighCouncil = whitelist.includes(user.email);
+  const displayRole = isHighCouncil ? "High Council" : user.role;
   const canCreate = user.role === "TEACHER" || user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 
   return (
@@ -59,6 +62,7 @@ export default async function ProfilePage() {
               email: user.email,
               image: (user as any).image || "",
               role: user.role,
+              displayRole: displayRole,
               bio: (user as any).bio || "",
               website: (user as any).website || "",
               twitter: (user as any).twitter || "",
