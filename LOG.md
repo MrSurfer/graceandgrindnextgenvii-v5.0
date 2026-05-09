@@ -2,6 +2,17 @@
 
 This file tracks major milestones, successful implementations, and key architectural pivots.
 
+## [2026-05-08] - Dynamic URL Resolution & Vercel Compatibility
+
+### Added
+- **Dynamic Base URL Utility**: Implemented `getBaseUrl()` in `src/lib/utils.ts` to automatically detect the application's origin across client and server environments.
+- **Vercel Auto-Detection**: Integrated `VERCEL_URL` and `NEXT_PUBLIC_VERCEL_URL` into the environment configuration for zero-config production deployments.
+- **Dynamic APP_URL Export**: Added a calculated `APP_URL` to `src/lib/env.ts` to replace hardcoded localhost defaults.
+
+### Fixed
+- **Vercel Logout Redirect**: Resolved an issue where logging out on Vercel redirected users to `localhost:3000`. Both `Navbar.tsx` and `InactivityHandler.tsx` now use dynamic callback URLs for `signOut`.
+- **Environment Schema Hardening**: Updated `envSchema` in `src/lib/env.ts` to make `NEXT_PUBLIC_APP_URL` optional, preventing build failures on Vercel when the variable is missing.
+
 ## [2026-05-08] - Admin Governance & Hierarchy Enforcement
 
 ### Added

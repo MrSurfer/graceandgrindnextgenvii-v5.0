@@ -64,7 +64,8 @@ Use this document to quickly rebuild context if memory drops or if you are a new
 - **Inactivity Timer**: Automatic logout after 4 hours of idle time (2 minutes during testing) for Level 2+ roles.
 - **Identity Verification (OTP)**: All new email/password registrations are locked behind a **6-digit OTP verification** flow. Users must verify their email at `/verify-email` before login is permitted.
 - **Redirection Logic:** Login redirection is handled in `src/app/login/page.tsx`. Owners go to `/owner`, Admins go to `/admin`, Teachers go to `/dashboard/teacher`, and Customers go to `/courses`.
-- **Middleware:** Authenticated route protection is handled in `src/proxy.ts`.
+- **middleware:** Authenticated route protection is handled in `src/proxy.ts`.
+- **Base URL Resolution:** The application uses a dynamic base URL system via `src/lib/utils.ts` (`getBaseUrl()`). This automatically detects if the app is running on Vercel or locally to ensure correct redirects for authentication and absolute URL generation.
 - **User Status:** A `status` field (`ACTIVE` vs `BLOCKED`) is checked during sign-in. Blocked users are rejected.
 
 ### Content Moderation Flow (CRITICAL)

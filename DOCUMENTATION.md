@@ -104,6 +104,7 @@ The platform uses **Resend** for sending automated emails to users.
 ### Error Tracking & Monitoring
 - **Structured Logging (`src/app/actions/logger.ts`):** A server-side logging utility that formats errors and info as structured JSON for better searchability in production environments (like Vercel).
 - **Global Error Boundary:** The `src/app/error.tsx` file automatically captures client-side crashes and reports them to the server-side logger.
+- **Dynamic URL Resolution:** The application utilizes `src/lib/utils.ts` and `src/lib/env.ts` to dynamically resolve the base URL (`APP_URL`). It automatically detects Vercel deployment URLs (`VERCEL_URL`) and falls back to `localhost:3000` in development, ensuring correct redirects for authentication flows.
 
 ---
 
