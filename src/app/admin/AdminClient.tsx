@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, memo } from "react";
-import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search } from "lucide-react";
+import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount } from "./actions";
 import { useRouter } from "next/navigation";
@@ -9,6 +9,7 @@ import Link from "next/link";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import { useSession } from "next-auth/react";
 import Pagination from "@/components/ui/Pagination";
+import HRMetricsPanel from "./HRMetricsPanel";
 
 const TABS = [
   { key: "users", label: "Manage Users" },
@@ -44,7 +45,7 @@ export default function AdminClient({
 }) {
   const { data: session } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge" | "hr">("users");
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
@@ -381,6 +382,21 @@ export default function AdminClient({
             )}
           </button>
         )}
+        {currentLevel >= 4 && (
+          <button
+            onClick={() => setActiveTab("hr")}
+            className={`pb-4 text-sm font-bold transition-all relative ${
+              activeTab === "hr" ? "text-amber-500" : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" /> HR Metrics
+            </span>
+            {activeTab === "hr" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 rounded-full" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -532,6 +548,9 @@ export default function AdminClient({
             />
           </>
         )}
+
+        {/* HR METRICS TAB */}
+        {activeTab === "hr" && <HRMetricsPanel />}
 
         {/* APPLICATIONS TAB */}
         {activeTab === "applications" && (
@@ -1279,6 +1298,9 @@ export default function AdminClient({
           </div>
         </div>
       )}
+
+      {/* HR METRICS TAB */}
+      {activeTab === "hr" && <HRMetricsPanel />}
     </>
   );
 }

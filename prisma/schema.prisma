@@ -31,6 +31,8 @@ model User {
   resetTokens    PasswordResetToken?
   teacherApp     TeacherApplication?
   actorLogs      EventLog[]          @relation("ActorLogs")
+  notifications  Notification[]
+  certificates   Certificate[]
 }
 
 model TeacherApplication {
@@ -54,12 +56,14 @@ model Course {
   teacherId       String
   isPriceLocked   Boolean          @default(false)
   imageUrl        String?
+  category        String?
   status          String           @default("DRAFT") // DRAFT, PENDING, PUBLISHED
   approvedUntil   DateTime?
   contentRequests ContentRequest[]
   teacher         User             @relation("TeacherCourses", fields: [teacherId], references: [id])
   enrollments     Enrollment[]
   lessons         Lesson[]
+  certificates    Certificate[]
 }
 
 model Lesson {
@@ -166,4 +170,25 @@ model EventLog {
   details   String?  @db.Text
   createdAt DateTime @default(now())
   actor     User     @relation("ActorLogs", fields: [actorId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
+  type      String   // e.g., "ROLE_CHANGE", "CONTENT_REQUEST", "GENERAL"
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id        String   @id @default(uuid())
+  userId    String
+  courseId  String
+  issuedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
 }

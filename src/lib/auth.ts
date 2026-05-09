@@ -21,20 +21,38 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        console.log(`[AUTH] Attempting login for: ${credentials.email}`);
         const user = await prisma.user.findUnique({
           where: { email: credentials.email as string },
         });
 
-        if (!user || !user.password) return null;
-        if (user.status === "BLOCKED") throw new Error("Account is blocked.");
-        if (!user.emailVerified) throw new Error("Please verify your email before logging in.");
+        if (!user || !user.password) {
+          console.log(`[AUTH] User not found or no password for: ${credentials.email}`);
+          return null;
+        }
 
+        if (user.status === "BLOCKED") {
+          console.log(`[AUTH] User is blocked: ${credentials.email}`);
+          throw new Error("Account is blocked.");
+        }
+
+        // if (!user.emailVerified) {
+        //   console.log(`[AUTH] User email not verified: ${credentials.email}`);
+        //   throw new Error("Please verify your email before logging in.");
+        // }
+
+        console.log(`[AUTH] Comparing password for: ${credentials.email}`);
         const isValid = await bcrypt.compare(
           credentials.password as string,
           user.password as string
         );
 
-        if (!isValid) return null;
+        if (!isValid) {
+          console.log(`[AUTH] Invalid password for: ${credentials.email}`);
+          return null;
+        }
+
+        console.log(`[AUTH] Login successful for: ${credentials.email}`);
 
         return {
           id: user.id,
@@ -77,6 +95,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         (user as any).role = dbUser.role;
       }
       if (user?.email) {
+        console.log(`[AUTH] Post-login processing for: ${user.email}`);
         const ownerWhitelist = (process.env.OWNER_EMAILS || "").split(",");
         const superAdminWhitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
 
@@ -88,6 +107,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         if (targetRole) {
+          console.log(`[AUTH] Auto-promoting ${user.email} to ${targetRole}`);
           const dbUser = await prisma.user.findUnique({ where: { email: user.email } });
           if (dbUser && dbUser.role !== targetRole) {
             await prisma.user.update({
@@ -96,6 +116,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             });
             // Also update the object in the current closure
             (user as any).role = targetRole;
+            console.log(`[AUTH] Role updated successfully for ${user.email}`);
           }
         }
       }

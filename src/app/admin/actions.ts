@@ -66,6 +66,14 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     await logAdminEvent(currentUser.id, "ROLE_CHANGE", userId, { oldRole: targetUser.role, newRole });
 
+    await prisma.notification.create({
+      data: {
+        userId: userId,
+        type: "ROLE_CHANGE",
+        message: `Your account role has been updated from ${targetUser.role} to ${newRole}.`
+      }
+    });
+
     revalidatePath("/admin");
     return { success: true, message: `User role updated to ${newRole}` };
   } catch (err: any) {
@@ -203,6 +211,15 @@ export async function reviewTeacherApplication(applicationId: string, status: "A
     if (status === "APPROVED") {
       await prisma.user.update({ where: { id: application.userId }, data: { role: "TEACHER" } });
     }
+
+    await prisma.notification.create({
+      data: {
+        userId: application.userId,
+        type: "APPLICATION_REVIEW",
+        message: `Your teacher application has been ${status.toLowerCase()}.`
+      }
+    });
+
     revalidatePath("/admin");
     return { success: true, message: `Application ${status.toLowerCase()} successfully.` };
   } catch (err: any) { return { error: err.message }; }
@@ -305,6 +322,18 @@ export async function reviewContentRequest(
       }
     });
 
+    // Notify the teacher
+    const targetUserId = request.course?.teacherId;
+    if (targetUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          type: "CONTENT_REVIEW",
+          message: `Your content request for ${request.lessonId ? 'lesson' : 'course'} has been ${status.toLowerCase()}.${adminFeedback ? ' See feedback for details.' : ''}`
+        }
+      });
+    }
+
     revalidatePath("/admin");
     revalidatePath("/courses");
     revalidatePath("/dashboard/teacher");
@@ -375,5 +404,141 @@ export async function forgeAccount(data: { email: string; name: string; role: st
   } catch (err: any) { 
     if (err.code === "P2002") return { error: "User with this email already exists." };
     return { error: err.message }; 
+  }
+}
+
+export async function getCourseAnalytics(courseId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "Admin not found." };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    if (currentLevel < 2) return { error: "Unauthorized" };
+
+    const lessons = await prisma.lesson.findMany({
+      where: { courseId },
+      orderBy: { order: 'asc' },
+      select: { id: true, title: true }
+    });
+
+    if (lessons.length === 0) return { data: [] };
+
+    const progressData = await prisma.lessonProgress.findMany({
+      where: { lesson: { courseId } },
+      select: { lessonId: true, userId: true }
+    });
+
+    const completionCounts: Record<string, number> = {};
+    lessons.forEach(l => completionCounts[l.id] = 0);
+    
+    progressData.forEach(p => {
+      if (completionCounts[p.lessonId] !== undefined) {
+        completionCounts[p.lessonId]++;
+      }
+    });
+
+    const analyticsData = lessons.map((lesson, index) => {
+      const completions = completionCounts[lesson.id];
+      const previousCompletions = index === 0 ? completions : completionCounts[lessons[index - 1].id];
+      // Drop-off is the number of people who completed the previous lesson but NOT this one
+      const dropOff = index === 0 ? 0 : Math.max(0, previousCompletions - completions);
+      
+      return {
+        lessonId: lesson.id,
+        title: lesson.title,
+        completions,
+        dropOff
+      };
+    });
+
+    return { data: analyticsData };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
+
+export async function getHRMetrics() {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!currentUser) return { error: "User not found." };
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    if (currentLevel < 4) return { error: "Only ROOT and above can access HR metrics." };
+
+    // Teacher Metrics
+    const teachers = await prisma.user.findMany({
+      where: { role: { in: ["TEACHER", "ADMIN", "SUPER_ADMIN", "OWNER"] } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        coursesCreated: {
+          select: {
+            id: true,
+            title: true,
+            published: true,
+            _count: { select: { enrollments: true, lessons: true } }
+          }
+        }
+      }
+    });
+
+    const teacherMetrics = teachers
+      .filter(t => t.coursesCreated.length > 0)
+      .map(t => {
+        const totalCourses = t.coursesCreated.length;
+        const publishedCourses = t.coursesCreated.filter(c => c.published).length;
+        const totalEnrollments = t.coursesCreated.reduce((sum, c) => sum + c._count.enrollments, 0);
+        const totalLessons = t.coursesCreated.reduce((sum, c) => sum + c._count.lessons, 0);
+
+        return {
+          id: t.id,
+          name: t.name || t.email,
+          email: t.email,
+          role: t.role,
+          joinedAt: t.createdAt,
+          totalCourses,
+          publishedCourses,
+          totalEnrollments,
+          totalLessons,
+          avgEnrollmentsPerCourse: totalCourses > 0 ? +(totalEnrollments / totalCourses).toFixed(1) : 0,
+        };
+      })
+      .sort((a, b) => b.totalEnrollments - a.totalEnrollments);
+
+    // Admin Metrics (actions taken)
+    const adminActions = await prisma.eventLog.groupBy({
+      by: ['actorId'],
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: 20,
+    });
+
+    const adminIds = adminActions.map(a => a.actorId);
+    const adminUsers = await prisma.user.findMany({
+      where: { id: { in: adminIds } },
+      select: { id: true, name: true, email: true, role: true }
+    });
+
+    const adminMetrics = adminActions.map(action => {
+      const user = adminUsers.find(u => u.id === action.actorId);
+      return {
+        id: action.actorId,
+        name: user?.name || user?.email || "Unknown",
+        email: user?.email || "",
+        role: user?.role || "UNKNOWN",
+        totalActions: action._count.id,
+      };
+    });
+
+    return { teacherMetrics, adminMetrics };
+  } catch (err: any) {
+    return { error: err.message };
   }
 }

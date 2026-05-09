@@ -36,6 +36,11 @@ export default async function ProfilePage() {
         select: {
           coursesCreated: true
         }
+      },
+      certificates: {
+        include: {
+          course: { select: { title: true } }
+        }
       }
     }
   });
@@ -111,6 +116,28 @@ export default async function ProfilePage() {
               )}
             </div>
           </div>
+
+          {/* Certificates Section */}
+          {(user as any).certificates && (user as any).certificates.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-500" /> Certificates
+              </h2>
+              <div className="space-y-3">
+                {(user as any).certificates.map((cert: any) => (
+                  <div key={cert.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-200 text-sm">{cert.course.title}</p>
+                      <p className="text-xs text-gray-500">Issued: {new Date(cert.issuedAt).toLocaleDateString()}</p>
+                    </div>
+                    <button className="bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                      Download
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Achievement Badges */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">

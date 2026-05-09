@@ -5,6 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { getBaseUrl } from "@/lib/utils";
 import { Heart, Menu, X, BookOpen, LayoutDashboard, Shield } from "lucide-react";
 import { useState } from "react";
+import NotificationBell from "./NotificationBell";
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -47,15 +48,50 @@ export default function Navbar() {
             )}
             
             <div className="flex items-center gap-3 border-l border-gray-800 pl-6 ml-2">
-              <Link href="/profile" className="flex items-center gap-2 hover:text-white transition-colors group">
-                <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 group-hover:border-amber-500 transition-colors overflow-hidden">
-                  {session.user?.image ? (
-                    <img src={session.user.image} alt="User avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    session.user?.name?.charAt(0).toUpperCase() || session.user?.email?.charAt(0).toUpperCase() || "?"
-                  )}
+              <NotificationBell />
+              <div className="relative group/profile">
+                <Link href="/profile" className="flex items-center gap-2 hover:text-white transition-colors">
+                  <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 group-hover/profile:border-amber-500 transition-colors overflow-hidden">
+                    {session.user?.image ? (
+                      <img src={session.user.image} alt="User avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      session.user?.name?.charAt(0).toUpperCase() || session.user?.email?.charAt(0).toUpperCase() || "?"
+                    )}
+                  </div>
+                </Link>
+                {/* Hover Tooltip */}
+                <div className="absolute top-full right-0 mt-2 opacity-0 scale-95 pointer-events-none group-hover/profile:opacity-100 group-hover/profile:scale-100 transition-all duration-200 origin-top-right z-50">
+                  <div className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 shadow-2xl min-w-[180px]">
+                    <p className="text-sm font-bold text-white truncate">{session.user?.name || "User"}</p>
+                    <p className="text-[10px] text-gray-500 truncate mb-2">{session.user?.email}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${
+                        role === "OWNER" ? "bg-amber-500" :
+                        role === "ROOT" ? "bg-red-500" :
+                        role === "SUPER_ADMIN" ? "bg-purple-500" :
+                        role === "ADMIN" ? "bg-blue-500" :
+                        role === "TEACHER" ? "bg-green-500" :
+                        "bg-gray-500"
+                      }`} />
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                        role === "OWNER" ? "text-amber-400" :
+                        role === "ROOT" ? "text-red-400" :
+                        role === "SUPER_ADMIN" ? "text-purple-400" :
+                        role === "ADMIN" ? "text-blue-400" :
+                        role === "TEACHER" ? "text-green-400" :
+                        "text-gray-400"
+                      }`}>
+                        {role === "OWNER" ? "Owner" :
+                         role === "ROOT" ? "Root" :
+                         role === "SUPER_ADMIN" ? "Super Admin" :
+                         role === "ADMIN" ? "Administrator" :
+                         role === "TEACHER" ? "Educator" :
+                         "Member"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </Link>
+              </div>
               <button
                 id="signout-btn"
                 onClick={() => signOut({ callbackUrl: getBaseUrl() })}

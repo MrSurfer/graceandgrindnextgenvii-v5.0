@@ -22,18 +22,20 @@ function LoginForm() {
   const userRole = (session?.user as any)?.role;
 
   useEffect(() => {
-    if (status === "authenticated" && userRole) {
+    if (status === "authenticated") {
       // If there's an explicit callbackUrl from search params, use it.
       // Otherwise, use role-based defaults.
       const explicitCallback = searchParams.get("callbackUrl");
-      if (explicitCallback) {
+      const isAuthPage = explicitCallback?.includes("/login") || explicitCallback?.includes("/register") || explicitCallback?.includes("/verify-email");
+      
+      if (explicitCallback && !isAuthPage) {
         router.push(explicitCallback);
         return;
       }
 
       if (userRole === "OWNER") {
         router.push("/owner");
-      } else if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") {
+      } else if (userRole === "ADMIN" || userRole === "SUPER_ADMIN" || userRole === "ROOT") {
         router.push("/admin");
       } else if (userRole === "TEACHER") {
         router.push("/dashboard/teacher");
@@ -57,8 +59,17 @@ function LoginForm() {
     if (result?.error) {
       setError("Invalid email or password.");
       setLoading(false);
+    } else {
+      router.refresh();
+      const cb = searchParams.get("callbackUrl");
+      const isAuthPage = cb?.includes("/login") || cb?.includes("/register") || cb?.includes("/verify-email");
+      
+      if (cb && !isAuthPage) {
+        window.location.assign(cb);
+      } else {
+        window.location.assign("/courses");
+      }
     }
-    // We don't need to push here because the useEffect will catch the status change
   }
 
   return (

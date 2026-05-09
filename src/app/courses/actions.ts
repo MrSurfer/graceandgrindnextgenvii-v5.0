@@ -19,6 +19,33 @@ export async function markLessonComplete(lessonId: string, courseSlug: string, l
       await prisma.lessonProgress.create({
         data: { userId, lessonId }
       });
+
+      // Certificate Generation Logic
+      const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
+      if (lesson) {
+        const totalLessons = await prisma.lesson.count({ 
+          where: { courseId: lesson.courseId, status: "PUBLISHED" } 
+        });
+        const completedLessons = await prisma.lessonProgress.count({ 
+          where: { userId, lesson: { courseId: lesson.courseId } }
+        });
+
+        if (totalLessons > 0 && completedLessons >= totalLessons) {
+          await prisma.certificate.upsert({
+            where: { userId_courseId: { userId, courseId: lesson.courseId } },
+            create: { userId, courseId: lesson.courseId },
+            update: {}
+          });
+
+          await prisma.notification.create({
+            data: {
+              userId,
+              type: "CERTIFICATE_EARNED",
+              message: `Congratulations! You have earned a certificate for completing the course.`
+            }
+          });
+        }
+      }
     }
 
     revalidatePath(`/courses`);

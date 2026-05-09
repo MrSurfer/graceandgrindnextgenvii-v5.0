@@ -56,7 +56,17 @@ The application uses NextAuth.js configured in `src/lib/auth.ts`.
   - **ROOT / SUPER_ADMIN / ADMIN:** Redirected to `/admin`.
   - **TEACHER:** Redirected to `/dashboard/teacher`.
   - **CUSTOMER/STUDENT:** Redirected to `/courses`.
-  This logic is implemented in `src/app/login/page.tsx` and protected by middleware in `src/proxy.ts`.
+  - **Sanitization:** The system automatically sanitizes the `callbackUrl`. If it points to an authentication page (`/login`, `/register`, or `/verify-email`), the redirect is ignored to prevent infinite loops, defaulting to the role-based destination.
+  This logic is implemented in `src/app/login/page.tsx` and `src/app/register/page.tsx`, and protected by middleware in `src/proxy.ts`.
+
+
+### User Experience & Interface
+The platform prioritizes a premium, interactive experience for all users.
+- **Premium Course Catalog:** The `/courses` page utilizes a client-side `CourseCatalog.tsx` component.
+  - **Categorized Search:** Real-time keyword filtering that groups results by their parent category.
+  - **Dynamic Filters:** Users can filter programs by Price (Free vs. Paid) and Category dropdowns.
+- **Navbar Profile Tooltip:** A group-hover CSS tooltip provides instant access to the user's Name, Email, and Hierarchical Role without additional clicks.
+- **Hierarchical Branding:** Role badges use a premium color palette: Purple (OWNER/ROOT), Amber (Super Admin), and Red (Admin).
 
 ### Purchasing & Enrollment Logic
 Course purchases and enrollments are handled securely via Stripe and custom Server Actions for high-performance feedback.
@@ -82,6 +92,12 @@ System administration and content management utilize Next.js Server Actions.
   - **Course Deletion Lock:** Courses with active enrollments are visually "Locked". Standard Admins are blocked from deleting such courses to preserve financial records.
   - **Super Admin Overrides:** Verified Super Admins can bypass the Enrollment Lock using an "Emergency Override" in the deletion modal.
   - **Account Forging:** Super Admins have access to a "Forge" panel to instantly provision any account type, bypassing standard registration and email verification for administrative efficiency.
+- **HR & Performance Metrics (`src/app/admin/actions.ts`):**
+  - **Level 4+ (ROOT/OWNER)** users have access to an exclusive "HR Metrics" tab.
+  - **Educator Analytics:** Displays total programs created and student enrollment numbers per teacher.
+  - **Admin Engagement:** Ranks administrative activity based on `EventLog` interaction volume.
+  - This data is used for operational oversight and rewarding platform staff.
+
 - **Teacher Applications (`src/app/profile/actions.ts`):**
   - Customers can apply to become teachers. The application creates a `TeacherApplication` record.
   - Admins review these applications. If approved, the user's role is automatically upgraded to `TEACHER`.

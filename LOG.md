@@ -1,5 +1,24 @@
 # GraceAndGrind Project Log
 
+## [2026-05-09] - Phase 7: UI/UX Polish & Administrative Governance
+
+### Added
+- **Premium Course Catalog:** Implemented `CourseCatalog.tsx` with real-time keyword search, category grouping, and advanced filters (Price, Category).
+- **HR & Operational Metrics:** Developed `HRMetricsPanel` and `getHRMetrics` server action for Level 4+ (ROOT/OWNER) oversight.
+  - **Educator Performance:** Tracks courses produced and total student enrollments per teacher.
+  - **Admin Activity Ranking:** Ranks administrative engagement based on `EventLog` volume.
+- **Navbar Profile Tooltip:** Added a group-hover CSS tooltip revealing User Name, Email, and Hierarchical Role with conditional styling.
+
+### Fixed
+- **Auth Loop Prevention:** Sanitized `callbackUrl` in `/login` and `/register` to ignore redirects back to authentication pages, resolving the "stuck on login" issue.
+- **Sign-Up Callback Preservation:** Refactored registration flow with `<Suspense>` to preserve `?trigger=` and `?callbackUrl=` parameters throughout the verify-email and login sequence.
+- **Import Resolution:** Corrected `notifications.ts` pathing issues and synchronized PostgreSQL schema with Prisma `category` field.
+
+### Status
+- **Phase 7 Completed:** Platform UI and governance tools are now production-ready.
+- **Phase 8 (In Progress):** Drafting the "Engine Swap" (Supabase Auth Migration + PBAC Transition).
+
+
 This file tracks major milestones, successful implementations, and key architectural pivots.
 
 ## [2026-05-08] - Dynamic URL Resolution & Vercel Compatibility

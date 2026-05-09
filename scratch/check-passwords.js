@@ -1,19 +1,14 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-async function main() {
+async function checkPasswords() {
   const users = await prisma.user.findMany({
-    select: { email: true, password: true },
-    take: 10
+    select: { email: true, password: true }
   });
-  console.log(JSON.stringify(users.map(u => ({ email: u.email, hasPassword: !!u.password })), null, 2));
+  users.forEach(u => {
+    console.log(`${u.email}: ${u.password ? 'HAS PASSWORD' : 'NO PASSWORD'}`);
+  });
+  await prisma.$disconnect();
 }
 
-main()
-  .catch(e => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+checkPasswords().catch(console.error);

@@ -1,14 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import Link from "next/link";
 import { Heart, Mail, Lock, User, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck, XCircle, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  let callbackUrl = searchParams.get("callbackUrl") || searchParams.get("trigger") || "/courses";
+  if (callbackUrl.includes("/login") || callbackUrl.includes("/register") || callbackUrl.includes("/verify-email")) {
+    callbackUrl = "/courses";
+  }
   const { data: session, status } = useSession();
   
   const [name, setName] = useState("");
@@ -26,9 +31,9 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/courses");
+      router.push(callbackUrl);
     }
-  }, [status, router]);
+  }, [status, router, callbackUrl]);
 
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -52,7 +57,7 @@ export default function RegisterPage() {
       setIsSuccess(true);
       // Wait for the animation/onboarding message to show for 3 seconds
       setTimeout(() => {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        router.push(`/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`);
       }, 3000);
     }
   }
@@ -240,7 +245,7 @@ export default function RegisterPage() {
 
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => signIn("google", { callbackUrl: "/profile" })}
+              onClick={() => signIn("google", { callbackUrl })}
               className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-gray-700 transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -252,7 +257,7 @@ export default function RegisterPage() {
               Google
             </button>
             <button
-              onClick={() => signIn("github", { callbackUrl: "/profile" })}
+              onClick={() => signIn("github", { callbackUrl })}
               className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-gray-700 transition-colors"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -271,5 +276,13 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }

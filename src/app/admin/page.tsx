@@ -69,8 +69,8 @@ export default async function AdminDashboard() {
   const contentRequests = await prisma.contentRequest.findMany({
     where: { status: "PENDING" },
     include: { 
-      course: { select: { title: true } },
-      lesson: { select: { title: true } }
+      course: { select: { id: true, title: true } },
+      lesson: { select: { id: true, title: true } }
     },
     orderBy: { createdAt: "desc" },
   });

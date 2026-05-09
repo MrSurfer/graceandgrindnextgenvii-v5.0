@@ -150,6 +150,20 @@ export async function requestLessonPublication(lessonId: string) {
       }
     });
 
+    // Notify admins
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "SUPER_ADMIN", "ROOT", "OWNER"] } }
+    });
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map(admin => ({
+          userId: admin.id,
+          type: "NEW_CONTENT_REQUEST",
+          message: `New publication request for lesson "${lesson.title}".`
+        }))
+      });
+    }
+
     revalidatePath(`/dashboard/teacher/courses/${lesson.courseId}`);
     return { success: true, message: "Publication request sent" };
   } catch (err: any) {
@@ -213,6 +227,20 @@ export async function submitContentRequest(targetId: string, type: "EDIT" | "DEL
         reason,
       }
     });
+
+    // Notify admins
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "SUPER_ADMIN", "ROOT", "OWNER"] } }
+    });
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map(admin => ({
+          userId: admin.id,
+          type: "NEW_CONTENT_REQUEST",
+          message: `New ${type} request submitted for ${isCourse ? 'course' : 'lesson'}.`
+        }))
+      });
+    }
 
     if (isCourse) {
       await prisma.course.update({ where: { id: courseId }, data: { status: "PENDING" } });
