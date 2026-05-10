@@ -82,6 +82,17 @@ export default async function AdminDashboard() {
     select: { course: { select: { price: true } } }
   });
 
+  const supportTickets = await prisma.supportTicket.findMany({
+    orderBy: { updatedAt: "desc" },
+    include: {
+      user: { select: { name: true, email: true, image: true } },
+      replies: {
+        include: { sender: { select: { name: true, role: true } } },
+        orderBy: { createdAt: "asc" }
+      }
+    }
+  });
+
   const eventLogs = await prisma.eventLog.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -113,6 +124,7 @@ export default async function AdminDashboard() {
         courses={courses}
         applications={teacherApplications}
         contentRequests={contentRequests}
+        supportTickets={supportTickets}
         eventLogs={eventLogs}
         currentUserId={session.user.id}
         isSuperAdmin={isSuperAdmin || isOwner}

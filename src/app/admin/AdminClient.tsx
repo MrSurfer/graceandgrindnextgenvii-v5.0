@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, memo } from "react";
-import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3, Key, Save, ChevronDown, Eye, EyeOff } from "lucide-react";
+import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3, Key, Save, ChevronDown, Eye, EyeOff, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount, updateUserPermissions } from "./actions";
 import { PERMISSIONS, ROLE_PERMISSIONS, hasPermission } from "@/lib/permissions";
@@ -22,6 +22,7 @@ export default function AdminClient({
   courses,
   applications,
   contentRequests,
+  supportTickets,
   eventLogs,
   currentUserId,
   superAdminEmails,
@@ -34,6 +35,7 @@ export default function AdminClient({
   courses: any[];
   applications: any[];
   contentRequests: any[];
+  supportTickets: any[];
   eventLogs: any[];
   currentUserId: string;
   superAdminEmails: string[];
@@ -45,7 +47,7 @@ export default function AdminClient({
   const permissions = (session?.user as any)?.permissions || [];
   const { formatPrice } = useCurrency();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge" | "hr" | "audit">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge" | "hr" | "audit" | "support">("users");
   const [auditLogSearch, setAuditLogSearch] = useState("");
   const [auditViewMode, setAuditViewMode] = useState<"timeline" | "grouped">("timeline");
   const [expandedAuditUser, setExpandedAuditUser] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function AdminClient({
   
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
+  const [expandedContentGroups, setExpandedContentGroups] = useState<Record<string, boolean>>({});
   const [selectedUserForAssign, setSelectedUserForAssign] = useState<any | null>(null);
   const [itemToDelete, setItemToDelete] = useState<{ type: "USER" | "PROGRAM"; item: any } | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
@@ -296,6 +299,32 @@ export default function AdminClient({
     }
   }
 
+  async function handleApproveAll(teacherName: string, requests: any[]) {
+    setActionLoading(true);
+    setLoadingMessage(`Approving all requests for ${teacherName}...`);
+    try {
+      const requestIds = requests.map(r => r.id);
+      // Optimistic UI update
+      setLocalContentRequests(prev => prev.filter(req => !requestIds.includes(req.id)));
+      
+      const promises = requests.map(req => reviewContentRequest(req.id, "APPROVED", "", 60));
+      const results = await Promise.all(promises);
+      
+      const failed = results.filter(res => res.error);
+      if (failed.length > 0) {
+        toast.error(`Some approvals failed for ${teacherName}.`);
+        setLocalContentRequests(contentRequests); // Revert on error
+      } else {
+        toast.success(`Approved all requests for ${teacherName}`);
+        router.refresh();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to approve all requests");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleAssign() {
     if (!selectedUserForAssign || !selectedCourseId) return;
     setAssignLoading(true);
@@ -510,6 +539,7 @@ export default function AdminClient({
           <optgroup label="User Management">
             <option value="users">Manage Users</option>
             <option value="customers">Customer Management</option>
+            <option value="support">Support Inbox ({supportTickets.filter(t => t.status === "OPEN").length})</option>
             {hasPermission(permissions, "user:forge") && <option value="forge">Forge Account</option>}
             {hasPermission(permissions, "hr:metrics") && <option value="hr">HR Metrics</option>}
           </optgroup>
@@ -529,7 +559,7 @@ export default function AdminClient({
       </div>
 
       {/* Search Bar */}
-      {["users", "courses", "customers", "content"].includes(activeTab) && (
+      {["users", "courses", "customers", "content", "support"].includes(activeTab) && (
         <div className="mb-6">
           <div className="relative max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -549,6 +579,55 @@ export default function AdminClient({
 
       {/* Tab Content */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-3xl overflow-hidden backdrop-blur-sm">
+
+        {/* SUPPORT INBOX TAB */}
+        {activeTab === "support" && (
+          <div className="p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+                <MessageSquare className="w-5 h-5 text-amber-500" />
+                Support Inbox
+              </h2>
+            </div>
+            <div className="space-y-4">
+              {supportTickets.length === 0 ? (
+                 <div className="text-center py-12 text-gray-500">No support tickets found.</div>
+              ) : supportTickets.map(ticket => (
+                <div key={ticket.id} className="bg-gray-800/30 border border-gray-800 rounded-2xl overflow-hidden">
+                  <div className="p-4 flex items-start justify-between border-b border-gray-800/50">
+                    <div>
+                      <h3 className="font-bold text-gray-200 text-lg mb-1">{ticket.subject}</h3>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>From: <span className="text-gray-300">{ticket.user?.name || ticket.user?.email}</span></span>
+                        <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                        <span className={`px-2 py-0.5 rounded-full font-bold uppercase ${ticket.status === "OPEN" ? "bg-amber-500/20 text-amber-500" : "bg-gray-800 text-gray-400"}`}>
+                          {ticket.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <p className="text-gray-300 text-sm whitespace-pre-wrap">{ticket.message}</p>
+                    {ticket.replies.length > 0 && (
+                      <div className="space-y-3 pl-4 border-l-2 border-gray-700">
+                        {ticket.replies.map((reply: any) => (
+                          <div key={reply.id} className="bg-gray-900 border border-gray-800 p-3 rounded-xl text-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-amber-500">{reply.sender?.name || "Support"}</span>
+                              <span className="text-[10px] text-gray-500">{new Date(reply.createdAt).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-gray-300">{reply.message}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Add reply logic via router.push or link to dedicated ticket view, or implement in-place reply if needed. For now, simple view */}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* USERS TAB */}
         {activeTab === "users" && (
@@ -787,12 +866,28 @@ export default function AdminClient({
                       .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
                       .map(([teacherName, requests]) => (
                       <React.Fragment key={teacherName}>
-                        <tr className="bg-gray-800/30">
+                        <tr className="bg-gray-800/30 group">
                           <td colSpan={5} className="px-6 py-3 font-bold text-gray-300 border-l-4 border-amber-500">
-                            Educator: {teacherName}
+                            <div className="flex items-center justify-between">
+                              <button 
+                                onClick={() => setExpandedContentGroups(prev => ({ ...prev, [teacherName]: !prev[teacherName] }))}
+                                className="flex items-center gap-2 hover:text-amber-400 transition-colors"
+                              >
+                                {expandedContentGroups[teacherName] ? <ChevronDown className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 -rotate-90" />}
+                                Educator: {teacherName} <span className="text-xs text-gray-500 ml-2 font-mono">({requests.length} pending)</span>
+                              </button>
+                              <button
+                                onClick={() => handleApproveAll(teacherName, requests)}
+                                disabled={actionLoading}
+                                className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-3 py-1.5 rounded text-xs transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1"
+                              >
+                                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                Approve All
+                              </button>
+                            </div>
                           </td>
                         </tr>
-                        {requests.map((req) => (
+                        {expandedContentGroups[teacherName] && requests.map((req) => (
                           <tr key={req.id} className="hover:bg-gray-800/40 transition-colors">
                             <td className="px-6 py-4 pl-10">
                               <div className="font-medium text-gray-200">{req.course.title}</div>

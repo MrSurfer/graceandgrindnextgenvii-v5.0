@@ -167,11 +167,18 @@ export default async function ProfilePage() {
                   return (
                     <div 
                       key={badge.id}
-                      className={`w-10 h-10 rounded-full bg-gray-800 border flex items-center justify-center cursor-help transition-all duration-300 hover:scale-110`} 
-                      title={`${badge.name}: ${badge.description}`}
-                      style={{ borderColor: 'currentColor' }}
+                      className="flex items-center gap-3 bg-gray-800/40 border border-gray-800 rounded-xl p-3 w-full sm:w-[calc(50%-6px)] md:w-auto"
                     >
-                      <Icon className={`w-5 h-5 ${badge.color}`} />
+                      <div 
+                        className="w-10 h-10 rounded-full bg-gray-900 border flex items-center justify-center shrink-0" 
+                        style={{ borderColor: 'currentColor' }}
+                      >
+                        <Icon className={`w-5 h-5 ${badge.color}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-200 truncate">{badge.name}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{badge.description}</p>
+                      </div>
                     </div>
                   );
                 })
@@ -186,29 +193,29 @@ export default async function ProfilePage() {
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-amber-500" /> Core Stats
             </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
-                <div className="text-3xl font-extrabold text-orange-400 flex items-center justify-center gap-1">
-                  <Flame className="w-6 h-6" /> {gamification.currentStreak}
+            <div className="grid grid-cols-2 gap-4 sm:gap-6">
+              <div className="bg-gray-800/50 rounded-2xl p-5 sm:p-6 text-center border border-gray-700/50 flex flex-col justify-center items-center">
+                <div className="text-3xl sm:text-4xl font-extrabold text-orange-400 flex items-center justify-center gap-2">
+                  <Flame className="w-6 h-6 sm:w-8 sm:h-8" /> {gamification.currentStreak}
                 </div>
-                <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mt-1">
+                <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-widest font-bold mt-2">
                   Day Streak
                 </div>
               </div>
-              <div className="bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
-                <div className="text-3xl font-extrabold text-blue-400">
+              <div className="bg-gray-800/50 rounded-2xl p-5 sm:p-6 text-center border border-gray-700/50 flex flex-col justify-center items-center">
+                <div className="text-3xl sm:text-4xl font-extrabold text-blue-400">
                   {user.enrollments.length}
                 </div>
-                <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mt-1">
+                <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-widest font-bold mt-2">
                   Enrolled
                 </div>
               </div>
               {canCreate && (
-                <div className="col-span-2 bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
-                  <div className="text-3xl font-extrabold text-amber-400">
+                <div className="col-span-2 bg-gray-800/50 rounded-2xl p-5 sm:p-6 text-center border border-gray-700/50 flex flex-col justify-center items-center">
+                  <div className="text-3xl sm:text-4xl font-extrabold text-amber-400">
                     {user._count.coursesCreated}
                   </div>
-                  <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mt-1">
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-widest font-bold mt-2">
                     Published Programs
                   </div>
                 </div>

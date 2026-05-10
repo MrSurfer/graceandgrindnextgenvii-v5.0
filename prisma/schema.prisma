@@ -34,6 +34,8 @@ model User {
   actorLogs      EventLog[]          @relation("ActorLogs")
   notifications  Notification[]
   certificates   Certificate[]
+  supportTickets SupportTicket[]     @relation("UserTickets")
+  ticketReplies  TicketReply[]       @relation("TicketReplies")
 }
 
 model TeacherApplication {
@@ -176,4 +178,28 @@ model Certificate {
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  userId    String
+  subject   String
+  message   String   @db.Text
+  status    String   @default("OPEN") // OPEN, CLOSED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User          @relation("UserTickets", fields: [userId], references: [id], onDelete: Cascade)
+  replies   TicketReply[] @relation("TicketRepliesRelation")
+}
+
+model TicketReply {
+  id        String   @id @default(uuid())
+  ticketId  String
+  senderId  String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  ticket    SupportTicket @relation("TicketRepliesRelation", fields: [ticketId], references: [id], onDelete: Cascade)
+  sender    User          @relation("TicketReplies", fields: [senderId], references: [id], onDelete: Cascade)
 }
