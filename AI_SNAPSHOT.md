@@ -1,5 +1,5 @@
 # GraceAndGrind AI Memory Snapshot
-> Auto-generated: 2026-05-10 09:51 UTC
+> Auto-generated: 2026-05-10 10:19 UTC
 > **Read this at the START of every new conversation to restore full context.**
 
 ---
@@ -30,7 +30,7 @@ This repository contains a high-performance parenting education hub. It is desig
 - **Target Audience**: Habesha parents and families navigating life in the West while honoring their cultural heritage.
 - **Core Entities**: Courses (Parenting topics), Lessons/Sessions (Content), Enrollments (Access).
 
-## 💎 Core Values
+## Core Values
 1. **Community First**: Decisions are driven by community service, not just profit.
 2. **Cultural Integrity**: Honoring Ethiopian and Eritrean culture, language, and faith without forced assimilation.
 3. **Practical Wisdom**: Combining faith-grounded values with actionable real-world knowledge.
@@ -38,10 +38,10 @@ This repository contains a high-performance parenting education hub. It is desig
 5. **Quality Without Compromise**: Prioritizing exceptional content quality over quantity.
 6. **Radical Accessibility**: Critical community resources (immigration, newcomer guides) are always free.
 
-## 📋 Verification & QA
+## Verification & QA
 - **[test_checklist.md](file:///c:/Users/ytyir/OneDrive/Desktop/Projects/GraceAndGrindNextGenV2/graceandgrindnextgenvii/test_checklist.md)**: The master roadmap for E2E testing across all roles. Always refer to this when verifying new features.
 
-## 🤖 AI Assistant Instructions
+## AI Assistant Instructions
 **If you are an AI reading this, this is your map to the project.** 
 Use this document to quickly rebuild context if memory drops or if you are a new AI taking over. It summarizes the architecture, database models, and critical logic flows.
 
@@ -261,6 +261,7 @@ User, TeacherApplication, Course, Lesson, ContentRequest, Comment, LessonProgres
 
 ## Recent Git History (last 8 commits)
 
+23e38ca Praise God: the PBAC transition is going well
 56376e6 Praise God: last feature update before Engine Change!
 97b061d Praise God: First prototype for showcasing
 291c165 Praise God: First prototype for showcasing
@@ -268,98 +269,12 @@ User, TeacherApplication, Course, Lesson, ContentRequest, Comment, LessonProgres
 952843b Praise God Finished version 2 of the project on branch 2
 6f81363 Fix: Guaranteed dynamic redirects for Stripe using URL origin
 28eec2f Fix: Hardened logout redirect to stay on current site
-5f9c2eb Fix: Dynamic Stripe redirects for local and production
 
 ---
 
 ## Uncommitted Changes
 
 M AI_CONTEXT.md
- M DOCUMENTATION.md
- M LOG.md
-M  README.md
- M package-lock.json
- M package.json
- M prisma/schema.prisma
- M src/app/actions/notifications.ts
- M src/app/actions/storage.ts
- M src/app/admin/AdminClient.tsx
- M src/app/admin/actions.ts
- M src/app/admin/page.tsx
- D src/app/api/auth/[...nextauth]/route.ts
- M src/app/api/checkout/[courseId]/route.ts
- M src/app/api/enroll/[courseId]/route.ts
- D src/app/api/register/route.ts
- M src/app/api/teacher/courses/route.ts
- M src/app/courses/[slug]/[lessonSlug]/loading.tsx
- M src/app/courses/[slug]/[lessonSlug]/page.tsx
- M src/app/courses/[slug]/page.tsx
- M src/app/courses/actions.ts
- M src/app/courses/page.tsx
- M src/app/dashboard/teacher/TeacherClient.tsx
- M src/app/dashboard/teacher/actions.ts
- M src/app/dashboard/teacher/courses/[id]/edit/page.tsx
- M src/app/dashboard/teacher/courses/[id]/layout.tsx
- M src/app/dashboard/teacher/courses/[id]/lessons/[lessonId]/edit/page.tsx
- M src/app/dashboard/teacher/page.tsx
- D src/app/forgot-password/actions.ts
- M src/app/forgot-password/page.tsx
- M src/app/globals.css
- M src/app/layout.tsx
- M src/app/loading.tsx
- M src/app/login/page.tsx
- M src/app/owner/actions.ts
- M src/app/owner/logs/page.tsx
- M src/app/owner/page.tsx
- M src/app/page.tsx
- M src/app/profile/ProfileClient.tsx
- M src/app/profile/actions.ts
- M src/app/profile/page.tsx
- M src/app/register/page.tsx
- D src/app/reset-password/actions.ts
- M src/app/reset-password/page.tsx
- D src/app/verify-email/actions.ts
- M src/app/verify-email/page.tsx
- M src/components/EnrollButton.tsx
- M src/components/InactivityHandler.tsx
- M src/components/LoadingOverlay.tsx
- M src/components/Navbar.tsx
- M src/components/Providers.tsx
- D src/lib/auth.ts
- M src/lib/prisma.ts
- M src/proxy.ts
-?? AI_SNAPSHOT.md
-?? disable_rls.sql
-?? replace_auth.js
-?? scratch/bootstrap_owners.js
-?? scratch/check_rls.sql
-?? scratch/check_users.js
-?? scratch/setup_rls.sql
-?? scratch/setup_trigger.sql
-?? scratch/verify.js
-?? scratch/verify_rls.sql
-?? scripts/
-?? src/app/actions/auth.ts
-?? src/app/admin/loading.tsx
-?? src/app/api/bootstrap/
-?? src/app/auth/
-?? src/app/certificates/
-?? src/app/courses/loading.tsx
-?? src/app/dashboard/teacher/AnalyticsTab.tsx
-?? src/app/dashboard/teacher/loading.tsx
-?? src/app/profile/loading.tsx
-?? src/components/CommandPalette.tsx
-?? src/components/CountUp.tsx
-?? src/components/HorizontalScroll.tsx
-?? src/components/TranslatedHero.tsx
-?? src/components/providers/
-?? src/lib/CurrencyContext.tsx
-?? src/lib/currency.ts
-?? src/lib/gamification.ts
-?? src/lib/i18n/
-?? src/lib/permissions.ts
-?? src/lib/supabase/
-?? supabase_trigger.sql
 
 ---
 

@@ -9,7 +9,7 @@ This repository contains a high-performance parenting education hub. It is desig
 - **Target Audience**: Habesha parents and families navigating life in the West while honoring their cultural heritage.
 - **Core Entities**: Courses (Parenting topics), Lessons/Sessions (Content), Enrollments (Access).
 
-## 💎 Core Values
+## Core Values
 1. **Community First**: Decisions are driven by community service, not just profit.
 2. **Cultural Integrity**: Honoring Ethiopian and Eritrean culture, language, and faith without forced assimilation.
 3. **Practical Wisdom**: Combining faith-grounded values with actionable real-world knowledge.
@@ -17,10 +17,10 @@ This repository contains a high-performance parenting education hub. It is desig
 5. **Quality Without Compromise**: Prioritizing exceptional content quality over quantity.
 6. **Radical Accessibility**: Critical community resources (immigration, newcomer guides) are always free.
 
-## 📋 Verification & QA
+## Verification & QA
 - **[test_checklist.md](file:///c:/Users/ytyir/OneDrive/Desktop/Projects/GraceAndGrindNextGenV2/graceandgrindnextgenvii/test_checklist.md)**: The master roadmap for E2E testing across all roles. Always refer to this when verifying new features.
 
-## 🤖 AI Assistant Instructions
+## AI Assistant Instructions
 **If you are an AI reading this, this is your map to the project.** 
 Use this document to quickly rebuild context if memory drops or if you are a new AI taking over. It summarizes the architecture, database models, and critical logic flows.
 
