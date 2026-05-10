@@ -56,7 +56,7 @@ export default function Navbar() {
       </Link>
 
       {/* Desktop Nav */}
-      <nav className="hidden md:flex items-center gap-6 text-sm font-medium h-full">
+      <nav className="hidden lg:flex items-center gap-6 text-sm font-medium h-full">
         <NavLink href="/courses">
           <BookOpen className="w-4 h-4" /> {t.nav.programs}
         </NavLink>
@@ -185,7 +185,7 @@ export default function Navbar() {
       </nav>
 
       {/* Mobile Right Side */}
-      <div className="flex items-center gap-4 md:hidden">
+      <div className="flex items-center gap-4 lg:hidden">
         {session && (
           <Link href="/profile" className="flex items-center">
             <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 overflow-hidden">
@@ -204,7 +204,7 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {menuOpen && (
-        <div className="absolute top-full left-0 w-full bg-gray-950/98 border-b border-gray-800 flex flex-col md:hidden shadow-2xl max-h-[85vh] overflow-y-auto">
+        <div className="absolute top-full left-0 w-full bg-gray-950/98 border-b border-gray-800 flex flex-col lg:hidden shadow-2xl max-h-[85vh] overflow-y-auto">
           {/* Profile summary */}
           {session && (
             <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-800/60 bg-gray-900/40">
