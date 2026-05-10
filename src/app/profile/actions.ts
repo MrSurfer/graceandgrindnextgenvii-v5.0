@@ -69,6 +69,30 @@ export async function updateProfile(data: {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { name: true, nameLockedAt: true, nameChangePass: true }
+    });
+
+    if (!user) return { error: "User not found" };
+
+    const isChangingName = data.name && data.name.trim() !== (user.name || "").trim();
+    let nameLockUpdate: Record<string, any> = {};
+
+    if (isChangingName) {
+      if (user.nameLockedAt && !user.nameChangePass) {
+        return { error: "Your name is locked. Please open a Support Ticket to request a one-time name change pass." };
+      }
+      // If they have a pass and are changing name, consume the pass and keep locked
+      if (user.nameLockedAt && user.nameChangePass) {
+        nameLockUpdate = { nameChangePass: false };
+      }
+      // First time setting name — lock it
+      if (!user.nameLockedAt && data.name?.trim()) {
+        nameLockUpdate = { nameLockedAt: new Date() };
+      }
+    }
+
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
@@ -79,11 +103,17 @@ export async function updateProfile(data: {
         twitter: data.twitter,
         instagram: data.instagram,
         linkedin: data.linkedin,
+        ...nameLockUpdate,
       },
     });
 
     revalidatePath("/profile");
-    return { success: true, message: "Profile updated successfully" };
+    return { 
+      success: true, 
+      message: isChangingName && user.nameChangePass 
+        ? "Name updated. Your one-time pass has been used and the name is locked again." 
+        : "Profile updated successfully" 
+    };
   } catch (err: any) {
     return { error: err.message || "Failed to update profile" };
   }
@@ -94,8 +124,6 @@ export async function requestAccountDeletion() {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
 
-    // In a real scenario, you'd send an email to admin or queue it for deletion.
-    // For now, we will just block the account to simulate a soft delete request.
     await prisma.user.update({
       where: { id: session.user.id },
       data: { status: "BLOCKED" }

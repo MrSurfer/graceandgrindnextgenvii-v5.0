@@ -24,6 +24,8 @@ export default function ProfileClient({
     twitter: string;
     instagram: string;
     linkedin: string;
+    nameLockedAt?: Date | null;
+    nameChangePass?: boolean;
   };
   applicationStatus?: string,
   lastUpdate?: Date
@@ -36,8 +38,11 @@ export default function ProfileClient({
   const [instagram, setInstagram] = useState(user.instagram || "");
   const [linkedin, setLinkedin] = useState(user.linkedin || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveConfirm, setSaveConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const isNameLocked = !!(user.nameLockedAt && !user.nameChangePass);
 
   const { data: session } = useSession();
   const permissions = session?.user?.permissions || [];
@@ -46,6 +51,13 @@ export default function ProfileClient({
   const showApplyButton = !applicationStatus || (applicationStatus === "REJECTED" && diffDays >= 7);
 
   async function handleSaveProfile() {
+    if (!saveConfirm) {
+      setSaveConfirm(true);
+      // Auto-reset after 4 seconds if not confirmed
+      setTimeout(() => setSaveConfirm(false), 4000);
+      return;
+    }
+    setSaveConfirm(false);
     setIsSaving(true);
     try {
       const res = await updateProfile({ 
@@ -116,14 +128,43 @@ export default function ProfileClient({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-gray-500">Full Name</label>
+              <label className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                Full Name
+                {user.nameLockedAt && (
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                    user.nameChangePass 
+                      ? "bg-green-500/20 text-green-400 border border-green-500/30" 
+                      : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  }`}>
+                    {user.nameChangePass ? "🔓 Unlocked" : "🔒 Locked"}
+                  </span>
+                )}
+              </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
-                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-200 focus:outline-none focus:border-amber-500 transition-colors"
+                disabled={isNameLocked}
+                placeholder="Enter your full name"
+                className={`border rounded-lg px-4 py-2 text-gray-200 focus:outline-none transition-colors ${
+                  isNameLocked 
+                    ? "bg-gray-800/30 border-gray-700/50 text-gray-500 cursor-not-allowed" 
+                    : "bg-gray-800 border-gray-700 focus:border-amber-500"
+                }`}
               />
+              {isNameLocked && (
+                <p className="text-[11px] text-amber-600/80 flex items-start gap-1.5 leading-relaxed">
+                  <span className="shrink-0 mt-0.5">🔒</span>
+                  Your name is locked to protect your certificate integrity. 
+                  <a href="/support" className="text-amber-500 hover:text-amber-400 underline underline-offset-2 font-bold ml-1">Open a ticket</a> to request a one-time name change.
+                </p>
+              )}
+              {user.nameChangePass && (
+                <p className="text-[11px] text-green-500/80 flex items-start gap-1.5 leading-relaxed">
+                  <span className="shrink-0 mt-0.5">✅</span>
+                  You have a one-time name change pass. Update your name then save — it will lock again after.
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium text-gray-500 flex items-center gap-1">
@@ -303,10 +344,14 @@ export default function ProfileClient({
           <button
             onClick={handleSaveProfile}
             disabled={isSaving}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-gray-950 font-bold px-6 py-2.5 rounded-lg transition-colors"
+            className={`flex items-center gap-2 font-bold px-6 py-2.5 rounded-lg transition-all disabled:opacity-50 ${
+              saveConfirm 
+                ? "bg-yellow-400 hover:bg-yellow-300 text-gray-950 shadow-lg shadow-yellow-400/20 scale-105" 
+                : "bg-amber-500 hover:bg-amber-400 text-gray-950"
+            }`}
           >
             {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-            Update Profile
+            {saveConfirm ? "Confirm Save?" : "Save Changes"}
           </button>
         </div>
       </div>

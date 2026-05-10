@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, memo } from "react";
-import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3, Key, Save, ChevronDown, Eye, EyeOff, MessageSquare } from "lucide-react";
+import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3, Key, Save, ChevronDown, Eye, EyeOff, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount, updateUserPermissions } from "./actions";
+import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount, updateUserPermissions, replyToSupportTicket } from "./actions";
 import { PERMISSIONS, ROLE_PERMISSIONS, hasPermission } from "@/lib/permissions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import { useSession } from "@/components/providers/SupabaseProvider";
 import Pagination from "@/components/ui/Pagination";
 import HRMetricsPanel from "./HRMetricsPanel";
 import { useCurrency } from "@/lib/CurrencyContext";
+import HorizontalScroll from "@/components/HorizontalScroll";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 
 
@@ -54,6 +55,8 @@ export default function AdminClient({
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
+  const [isReplying, setIsReplying] = useState<string | null>(null);
   const PAGE_SIZE = 10;
   
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -345,6 +348,24 @@ export default function AdminClient({
     }
   }
 
+  async function handleSendReply(ticketId: string) {
+    const text = replyText[ticketId]?.trim();
+    if (!text) return;
+
+    try {
+      setIsReplying(ticketId);
+      const res = await replyToSupportTicket(ticketId, text);
+      if (res.error) throw new Error(res.error);
+      
+      toast.success(res.message);
+      setReplyText(prev => ({ ...prev, [ticketId]: "" }));
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsReplying(null);
+    }
+  }
+
   async function handleForge() {
     if (!forgeData.email || !forgeData.name) return;
     setForgeLoading(true);
@@ -524,38 +545,88 @@ export default function AdminClient({
         ))}
       </div>
 
-      {/* Tabs - Categorized Dropdown */}
-      <div className="mb-10 relative max-w-xs">
-        {(applications.length > 0 || contentRequests.length > 0) && (
-          <div className="absolute -top-2 -right-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/20 border border-gray-900">
-            {applications.length + contentRequests.length}
+      {/* Tabs — Horizontal Scroll Pill Bar */}
+      <div className="mb-10">
+        <HorizontalScroll showArrows={true} showGradients={true} cardWidth={160}>
+          {/* GROUP: User Management */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest whitespace-nowrap px-1 self-center">Users</span>
+            {([
+              { id: "users",     label: "Manage Users",   icon: <Users className="w-3.5 h-3.5" /> },
+              { id: "customers", label: "Customers",       icon: <UserCog className="w-3.5 h-3.5" /> },
+              { id: "support",   label: "Support Inbox",  icon: <MessageSquare className="w-3.5 h-3.5" />, badge: supportTickets.filter(t => t.status === "OPEN").length || 0 },
+              ...(hasPermission(permissions, "user:forge") ? [{ id: "forge", label: "Forge Account", icon: <Key className="w-3.5 h-3.5" /> }] : []),
+              ...(hasPermission(permissions, "hr:metrics")  ? [{ id: "hr",    label: "HR Metrics",    icon: <BarChart3 className="w-3.5 h-3.5" /> }] : []),
+            ] as { id: string; label: string; icon: React.ReactNode; badge?: number }[]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`relative shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap border ${
+                  activeTab === tab.id
+                    ? "bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-sm shadow-amber-500/10"
+                    : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-600"
+                }`}
+              >
+                {tab.icon}{tab.label}
+                {(tab.badge ?? 0) > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[9px] font-black rounded-full px-1 border-2 border-gray-950">{tab.badge}</span>
+                )}
+              </button>
+            ))}
           </div>
-        )}
-        <select
-          value={activeTab}
-          onChange={(e) => setActiveTab(e.target.value as any)}
-          className="w-full bg-gray-900 border border-gray-800 rounded-xl pl-4 pr-10 py-3 text-white font-bold text-sm focus:ring-amber-500 focus:border-amber-500 appearance-none cursor-pointer"
-        >
-          <optgroup label="User Management">
-            <option value="users">Manage Users</option>
-            <option value="customers">Customer Management</option>
-            <option value="support">Support Inbox ({supportTickets.filter(t => t.status === "OPEN").length})</option>
-            {hasPermission(permissions, "user:forge") && <option value="forge">Forge Account</option>}
-            {hasPermission(permissions, "hr:metrics") && <option value="hr">HR Metrics</option>}
-          </optgroup>
-          <optgroup label="Course & Content">
-            <option value="courses">Manage Courses</option>
-            <option value="applications">Applications ({applications.length})</option>
-            <option value="content">Content Approvals ({contentRequests.length})</option>
-          </optgroup>
-          <optgroup label="System & Analytics">
-            <option value="revenue">Revenue & ROI</option>
-            {hasPermission(permissions, "audit:view") && <option value="audit">Audit Logs</option>}
-          </optgroup>
-        </select>
-        <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-500 flex items-center justify-center">
-          <ChevronDown className="w-5 h-5" />
-        </div>
+
+          {/* Divider */}
+          <div className="w-px h-8 bg-gray-800 self-center mx-2 shrink-0" />
+
+          {/* GROUP: Course & Content */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest whitespace-nowrap px-1 self-center">Content</span>
+            {([
+              { id: "courses",      label: "Manage Courses",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: "applications", label: "Applications",       icon: <GraduationCap className="w-3.5 h-3.5" />, badge: applications.length },
+              { id: "content",      label: "Content Approvals", icon: <CheckCircle className="w-3.5 h-3.5" />, badge: contentRequests.length },
+            ] as { id: string; label: string; icon: React.ReactNode; badge?: number }[]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`relative shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap border ${
+                  activeTab === tab.id
+                    ? "bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-sm shadow-amber-500/10"
+                    : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-600"
+                }`}
+              >
+                {tab.icon}{tab.label}
+                {(tab.badge ?? 0) > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[9px] font-black rounded-full px-1 border-2 border-gray-950">{tab.badge}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div className="w-px h-8 bg-gray-800 self-center mx-2 shrink-0" />
+
+          {/* GROUP: System */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest whitespace-nowrap px-1 self-center">System</span>
+            {([
+              { id: "revenue", label: "Revenue & ROI", icon: <DollarSign className="w-3.5 h-3.5" /> },
+              ...(hasPermission(permissions, "audit:view") ? [{ id: "audit", label: "Audit Logs", icon: <ShieldCheck className="w-3.5 h-3.5" /> }] : []),
+            ] as { id: string; label: string; icon: React.ReactNode; badge?: number }[]).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`relative shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap border ${
+                  activeTab === tab.id
+                    ? "bg-amber-500/10 border-amber-500/40 text-amber-400 shadow-sm shadow-amber-500/10"
+                    : "bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-600"
+                }`}
+              >
+                {tab.icon}{tab.label}
+              </button>
+            ))}
+          </div>
+        </HorizontalScroll>
       </div>
 
       {/* Search Bar */}
@@ -621,7 +692,33 @@ export default function AdminClient({
                         ))}
                       </div>
                     )}
-                    {/* Add reply logic via router.push or link to dedicated ticket view, or implement in-place reply if needed. For now, simple view */}
+                    
+                    {/* Inline Reply Form */}
+                    {hasPermission(permissions, "support:reply") && ticket.status === "OPEN" && (
+                      <div className="mt-4 flex gap-3">
+                        <input
+                          type="text"
+                          placeholder="Type your reply to the user..."
+                          value={replyText[ticket.id] || ""}
+                          onChange={(e) => setReplyText(prev => ({ ...prev, [ticket.id]: e.target.value }))}
+                          className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSendReply(ticket.id);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSendReply(ticket.id)}
+                          disabled={!replyText[ticket.id]?.trim() || isReplying === ticket.id}
+                          className="bg-amber-500 hover:bg-amber-600 text-gray-950 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isReplying === ticket.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                          Reply
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1838,17 +1935,17 @@ export default function AdminClient({
       {/* PBAC Permission Studio Modal */}
       {selectedUserForPerms && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-amber-500/10">
+          <div className="bg-gray-950 border border-gray-700 rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-amber-500/10">
             {/* Header */}
-            <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gray-800/30">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gray-900/50">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
                   <Key className="w-6 h-6 text-amber-500" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold">Permission Studio</h3>
+                  <h3 className="text-xl font-extrabold text-white">Permission Studio</h3>
                   <p className="text-sm text-gray-400">
-                    Modifying Keycard for <span className="font-mono text-gray-200">{selectedUserForPerms.email}</span>
+                    Modifying Keycard for <span className="font-mono text-amber-400">{selectedUserForPerms.email}</span>
                   </p>
                 </div>
               </div>
@@ -1862,33 +1959,59 @@ export default function AdminClient({
 
             {/* Content */}
             <div className="p-6 overflow-y-auto custom-scrollbar flex-grow">
-              <div className="mb-6 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3">
+              <div className="mb-6 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 flex gap-3">
                 <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0" />
                 <div className="text-sm text-blue-200/80">
-                  <span className="font-bold text-blue-300">Base Role: {selectedUserForPerms.role}</span>
-                  <p className="mt-1">
-                    Toggle permissions to fine-tune access. <strong className="text-white">Inherit</strong> follows the base role defaults. <strong className="text-amber-400">Allow</strong> grants explicit access. <strong className="text-red-400">Deny</strong> revokes access entirely, overriding the base role.
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-blue-300">Base Role:</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-black uppercase tracking-widest ${
+                      selectedUserForPerms.role === "OWNER" ? "bg-amber-500 text-gray-950" :
+                      selectedUserForPerms.role === "ROOT" ? "bg-red-500 text-white" :
+                      selectedUserForPerms.role === "SUPER_ADMIN" ? "bg-purple-500 text-white" :
+                      selectedUserForPerms.role === "ADMIN" ? "bg-blue-500 text-white" :
+                      selectedUserForPerms.role === "TEACHER" ? "bg-emerald-500 text-white" :
+                      "bg-gray-700 text-gray-300"
+                    }`}>
+                      {selectedUserForPerms.role}
+                    </span>
+                  </div>
+                  <p className="mt-1 leading-relaxed">
+                    Toggle permissions to fine-tune access. <strong className="text-white bg-gray-800 px-1 rounded">Inherit</strong> follows the base role defaults. <strong className="text-amber-400 bg-amber-400/10 px-1 rounded">Allow</strong> grants explicit access. <strong className="text-red-400 bg-red-400/10 px-1 rounded">Deny</strong> revokes access entirely, overriding the base role.
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {Object.entries(
-                  Object.entries(PERMISSIONS).reduce((acc, [key, value]) => {
-                    const category = value.split(":")[0];
-                    if (!acc[category]) acc[category] = [];
-                    acc[category].push({ key, value });
-                    return acc;
-                  }, {} as Record<string, { key: string; value: string }[]>)
-                ).map(([category, perms]) => (
-                  <div key={category} className="bg-gray-800/30 border border-gray-800/50 rounded-2xl p-5">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4 pb-2 border-b border-gray-800/50">
-                      {category}
-                    </h4>
-                    <div className="space-y-4">
-                      {perms.map(({ key, value }) => {
-                        const basePerms = ROLE_PERMISSIONS[selectedUserForPerms.role] || [];
-                        const isInheritedAllowed = basePerms.includes(value);
+                {(() => {
+                  const groups: Record<string, { label: string; perms: { key: string; value: string }[] }> = {
+                    engagement: { label: "🎓 Engagement & Support", perms: [] },
+                    content:    { label: "📚 Course & Content", perms: [] },
+                    users:      { label: "👤 User Management", perms: [] },
+                    system:     { label: "⚙️ System & Analytics", perms: [] },
+                    features:   { label: "🌟 Features", perms: [] },
+                    dashboards: { label: "🧭 Dashboards", perms: [] },
+                  };
+
+                  Object.entries(PERMISSIONS).forEach(([key, value]) => {
+                    const groupKey = 
+                      value.startsWith("lesson:") || value.startsWith("support:") ? "engagement" :
+                      value.startsWith("course:") || value.startsWith("content:") ? "content" :
+                      value.startsWith("user:") ? "users" :
+                      value.startsWith("feature:") ? "features" :
+                      value.endsWith(":dashboard") ? "dashboards" :
+                      "system";
+                    groups[groupKey].perms.push({ key, value });
+                  });
+
+                  return Object.values(groups).filter(g => g.perms.length > 0).map((group) => (
+                    <div key={group.label} className="bg-gray-900/50 border border-gray-800/80 rounded-2xl p-5">
+                      <h4 className="text-sm font-black uppercase tracking-widest text-amber-500 mb-4 pb-2 border-b border-gray-800/50 flex items-center gap-2">
+                        {group.label}
+                      </h4>
+                      <div className="space-y-3">
+                        {group.perms.map(({ key, value }) => {
+                          const basePerms = ROLE_PERMISSIONS[selectedUserForPerms.role] || [];
+                          const isInheritedAllowed = basePerms.includes(value);
                         
                         const isExplicitAllow = tempPermissions.includes(value);
                         const isExplicitDeny = tempPermissions.includes(`-${value}`);
@@ -1903,53 +2026,53 @@ export default function AdminClient({
                         };
                         
                         return (
-                          <div key={value} className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-3 rounded-xl bg-gray-900/50 border border-gray-800/50 hover:border-gray-700 transition-colors">
+                          <div key={value} className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-3 rounded-xl bg-gray-950 border border-gray-800 hover:border-gray-700 transition-colors">
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-bold text-gray-200 flex items-center flex-wrap gap-2">
                                 <span className="truncate">{value}</span>
                                 {currentState === "INHERIT" && isInheritedAllowed && (
-                                  <span className="text-[9px] uppercase tracking-wider font-bold bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded shrink-0">
-                                    Base: Yes
+                                  <span className="text-[9px] uppercase tracking-wider font-bold bg-green-500/10 border border-green-500/20 text-green-400 px-1.5 py-0.5 rounded shrink-0">
+                                    Base: Allow
                                   </span>
                                 )}
                                 {currentState === "INHERIT" && !isInheritedAllowed && (
-                                  <span className="text-[9px] uppercase tracking-wider font-bold bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded shrink-0">
-                                    Base: No
+                                  <span className="text-[9px] uppercase tracking-wider font-bold bg-gray-800 border border-gray-700 text-gray-400 px-1.5 py-0.5 rounded shrink-0">
+                                    Base: Deny
                                   </span>
                                 )}
                               </div>
                             </div>
                             
-                            <div className="flex flex-wrap bg-gray-950 rounded-lg p-1 border border-gray-800/80 shrink-0 gap-1">
+                            <div className="flex flex-wrap bg-gray-900 rounded-lg p-1 border border-gray-800 shrink-0 gap-1">
                               <button
                                 onClick={() => handleStateChange("INHERIT")}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex-1 text-center ${
                                   currentState === "INHERIT" 
-                                    ? "bg-gray-800 text-white shadow-sm" 
-                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+                                    ? "bg-gray-700 text-white shadow-sm" 
+                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"
                                 }`}
                               >
-                                INHERIT
+                                Inherit
                               </button>
                               <button
                                 onClick={() => handleStateChange("ALLOW")}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex-1 text-center ${
                                   currentState === "ALLOW" 
-                                    ? "bg-amber-500/20 text-amber-500 shadow-sm border border-amber-500/30" 
-                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+                                    ? "bg-amber-500 text-gray-950 shadow-sm" 
+                                    : "text-gray-500 hover:text-amber-500 hover:bg-amber-500/10"
                                 }`}
                               >
-                                ALLOW
+                                Allow
                               </button>
                               <button
                                 onClick={() => handleStateChange("DENY")}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex-1 text-center ${
                                   currentState === "DENY" 
-                                    ? "bg-red-500/20 text-red-400 shadow-sm border border-red-500/30" 
-                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+                                    ? "bg-red-500 text-white shadow-sm" 
+                                    : "text-gray-500 hover:text-red-400 hover:bg-red-500/10"
                                 }`}
                               >
-                                DENY
+                                Deny
                               </button>
                             </div>
                           </div>
@@ -1957,7 +2080,8 @@ export default function AdminClient({
                       })}
                     </div>
                   </div>
-                ))}
+                ));
+              })()}
               </div>
             </div>
 

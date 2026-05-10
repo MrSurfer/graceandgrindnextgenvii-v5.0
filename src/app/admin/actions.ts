@@ -644,3 +644,34 @@ export async function getHRMetrics() {
     return { error: err.message };
   }
 }
+
+export async function replyToSupportTicket(ticketId: string, message: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "support:reply")) return { error: "Access Denied: Missing support:reply permission." };
+
+    await prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: {
+        status: "IN_PROGRESS",
+        replies: {
+          create: {
+            message,
+            senderId: session.user.id
+          }
+        }
+      }
+    });
+
+    // Also send an email notification here if desired
+    
+    revalidatePath("/admin");
+    return { success: true, message: "Reply sent successfully." };
+  } catch (err: any) {
+    return { error: err.message || "Failed to send reply." };
+  }
+}

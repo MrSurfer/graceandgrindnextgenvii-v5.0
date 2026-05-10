@@ -49,6 +49,7 @@ export const PERMISSIONS = {
 
   // Engagement
   LESSON_COMMENT:     "lesson:comment",
+  SUPPORT_REPLY:      "support:reply",
 
   // System
   SYSTEM_SETTINGS:    "system:settings",
@@ -87,6 +88,7 @@ const _ADMIN: string[] = [
   PERMISSIONS.COURSE_VIEW_ALL,
   PERMISSIONS.COURSE_DELETE,
   PERMISSIONS.CONTENT_IMPORT,
+  PERMISSIONS.SUPPORT_REPLY,
 ];
 
 const _SUPER_ADMIN: string[] = [

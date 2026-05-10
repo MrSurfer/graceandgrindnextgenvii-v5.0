@@ -78,6 +78,8 @@ export default async function ProfilePage() {
               twitter: (user as any).twitter || "",
               instagram: (user as any).instagram || "",
               linkedin: (user as any).linkedin || "",
+              nameLockedAt: (user as any).nameLockedAt || null,
+              nameChangePass: (user as any).nameChangePass || false,
             }}
             applicationStatus={user.teacherApp?.status} 
             lastUpdate={user.teacherApp?.updatedAt}
