@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useSession, signOut } from "@/components/providers/SupabaseProvider";
 import { getBaseUrl } from "@/lib/utils";
 import { hasPermission } from "@/lib/permissions";
-import { Heart, Menu, X, BookOpen, LayoutDashboard, Shield } from "lucide-react";
+import { Heart, Menu, X, BookOpen, LayoutDashboard, Shield, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTranslation } from "@/lib/i18n/I18nContext";
 import { useCurrency, CURRENCY_LIST } from "@/lib/CurrencyContext";
 import type { CurrencyCode } from "@/lib/CurrencyContext";
+import { usePlatformSound } from "@/lib/SoundContext";
 import NotificationBell from "./NotificationBell";
 
 export default function Navbar() {
@@ -21,6 +22,7 @@ export default function Navbar() {
   const pathname = usePathname() || "";
   const { t, locale, setLocale } = useTranslation();
   const { currency, setCurrency } = useCurrency();
+  const { soundEnabled, toggleSound } = usePlatformSound();
   const hasLocalization = hasPermission(permissions, "feature:localization");
 
   // Helper component for animated nav links
@@ -93,6 +95,14 @@ export default function Navbar() {
                   <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>
               </div>
+
+              <button
+                onClick={toggleSound}
+                className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-amber-500 transition-colors"
+                title={soundEnabled ? "Mute sounds" : "Enable sounds"}
+              >
+                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </button>
 
               {hasLocalization && (
                 <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg p-1">

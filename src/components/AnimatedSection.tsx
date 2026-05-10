@@ -3,6 +3,8 @@
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
 
+import { forwardRef } from "react";
+
 interface Props {
   children: ReactNode;
   className?: string;
@@ -10,7 +12,7 @@ interface Props {
   type?: "fade" | "scale" | "slide";
 }
 
-export default function AnimatedSection({ children, className, delay = 0, type = "fade" }: Props) {
+const AnimatedSection = forwardRef<HTMLDivElement, Props>(({ children, className, delay = 0, type = "fade" }, ref) => {
   const variants = {
     fade: {
       initial: { opacity: 0, y: 20 },
@@ -30,6 +32,7 @@ export default function AnimatedSection({ children, className, delay = 0, type =
 
   return (
     <motion.div
+      ref={ref}
       initial={selected.initial}
       whileInView={selected.whileInView}
       viewport={{ once: true }}
@@ -39,4 +42,7 @@ export default function AnimatedSection({ children, className, delay = 0, type =
       {children}
     </motion.div>
   );
-}
+});
+
+AnimatedSection.displayName = "AnimatedSection";
+export default AnimatedSection;

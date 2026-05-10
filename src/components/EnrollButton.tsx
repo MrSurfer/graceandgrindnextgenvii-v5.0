@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
 import { enrollInFreeCourse } from "@/app/courses/actions";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
+import { usePlatformSound } from "@/lib/SoundContext";
+import { useCurrency } from "@/lib/CurrencyContext";
 
 interface EnrollButtonProps {
   courseId: string;
@@ -23,8 +26,11 @@ export default function EnrollButton({
 }: EnrollButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { playSound } = usePlatformSound();
+  const { formatPrice } = useCurrency();
 
   const handleEnroll = async () => {
+    playSound("click");
     if (isCourseTeacher) {
       router.push(`/dashboard/teacher/courses/${courseId}/edit`);
       return;
@@ -47,13 +53,16 @@ export default function EnrollButton({
     try {
       const res = await enrollInFreeCourse(courseId, courseSlug);
       if (res.error) {
+        playSound("error");
         toast.error(res.error);
       } else {
+        playSound("success");
         toast.success(res.message);
         // Force a refresh to update the UI
         router.refresh();
       }
     } catch (e: any) {
+      playSound("error");
       toast.error(e.message || "Failed to enroll");
     } finally {
       setLoading(false);
@@ -61,7 +70,9 @@ export default function EnrollButton({
   };
 
   return (
-    <button
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       onClick={handleEnroll}
       disabled={loading}
       className="px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-70 text-gray-950 font-bold rounded-lg transition-all whitespace-nowrap flex items-center justify-center gap-2 min-w-[140px]"
@@ -77,9 +88,9 @@ export default function EnrollButton({
             ? "Course Settings"
             : price === 0
             ? "Enroll Free"
-            : `Enroll for $${price}`}
+            : `Enroll for ${formatPrice(price)}`}
         </>
       )}
-    </button>
+    </motion.button>
   );
 }

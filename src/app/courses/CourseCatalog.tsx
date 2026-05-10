@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { PlayCircle, Clock, Search, Filter, ChevronDown, X, CheckCircle, BookOpen } from "lucide-react";
+import { motion } from "framer-motion";
+import { useCurrency } from "@/lib/CurrencyContext";
 
 type Course = {
   id: string;
@@ -48,6 +50,7 @@ export default function CourseCatalog({
   const [priceFilter, setPriceFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const { formatPrice } = useCurrency();
 
   const filteredCourses = useMemo(() => {
     return courses.filter((course) => {
@@ -306,8 +309,8 @@ export default function CourseCatalog({
                 </span>
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {categoryCourses.map((course) => (
-                  <CourseCard key={course.id} course={course} />
+                {categoryCourses.map((course, idx) => (
+                  <CourseCard key={course.id} course={course} index={idx} />
                 ))}
               </div>
             </div>
@@ -316,8 +319,8 @@ export default function CourseCatalog({
       ) : (
         /* Default Grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredCourses.map((course) => (
-            <CourseCard key={course.id} course={course} />
+          {filteredCourses.map((course, idx) => (
+            <CourseCard key={course.id} course={course} index={idx} />
           ))}
         </div>
       )}
@@ -325,12 +328,19 @@ export default function CourseCatalog({
   );
 }
 
-function CourseCard({ course }: { course: Course }) {
+function CourseCard({ course, index = 0 }: { course: Course, index?: number }) {
+  const { formatPrice } = useCurrency();
+
   return (
-    <Link
-      href={`/courses/${course.slug}`}
-      className="group relative bg-gray-900 rounded-2xl overflow-hidden border border-gray-800 hover:border-amber-500/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-amber-500/10"
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05, duration: 0.4 }}
     >
+      <Link
+        href={`/courses/${course.slug}`}
+        className="block group relative bg-gray-900 rounded-2xl overflow-hidden border border-gray-800 hover:border-amber-500/50 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-amber-500/10"
+      >
       {/* Thumbnail */}
       <div className="aspect-video bg-gray-950 relative flex items-center justify-center overflow-hidden">
         {course.imageUrl ? (
@@ -362,10 +372,11 @@ function CourseCard({ course }: { course: Course }) {
             <Clock className="w-3 h-3" /> {course._count.lessons} lessons
           </span>
           <span className="font-mono text-amber-500">
-            {course.price === 0 ? "Free" : `$${course.price}`}
+            {course.price === 0 ? "Free" : formatPrice(course.price)}
           </span>
         </div>
       </div>
-    </Link>
+      </Link>
+    </motion.div>
   );
 }
