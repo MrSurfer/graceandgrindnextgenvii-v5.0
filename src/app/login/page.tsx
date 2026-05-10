@@ -1,19 +1,22 @@
 "use client";
 
 import { useState, Suspense, useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "@/components/providers/SupabaseProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Heart, Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Heart, Mail, Lock, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck, AlertTriangle } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/courses";
+  const supabase = createClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,8 +26,6 @@ function LoginForm() {
 
   useEffect(() => {
     if (status === "authenticated") {
-      // If there's an explicit callbackUrl from search params, use it.
-      // Otherwise, use role-based defaults.
       const explicitCallback = searchParams.get("callbackUrl");
       const isAuthPage = explicitCallback?.includes("/login") || explicitCallback?.includes("/register") || explicitCallback?.includes("/verify-email");
       
@@ -50,22 +51,32 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
-    const result = await signIn("credentials", {
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
-      redirect: false,
     });
 
-    if (result?.error) {
-      setError("Invalid email or password.");
+    if (error) {
+      setError(error.message || "Invalid email or password.");
       setLoading(false);
     } else {
       router.refresh();
+      const { getCurrentSession } = await import("@/app/actions/auth");
+      const serverSession = await getCurrentSession();
+      const permissions = serverSession?.user?.permissions || [];
+      const { hasPermission } = await import("@/lib/permissions");
+      
       const cb = searchParams.get("callbackUrl");
       const isAuthPage = cb?.includes("/login") || cb?.includes("/register") || cb?.includes("/verify-email");
       
       if (cb && !isAuthPage) {
         window.location.assign(cb);
+      } else if (hasPermission(permissions, "owner:dashboard")) {
+        window.location.assign("/owner");
+      } else if (hasPermission(permissions, "admin:dashboard")) {
+        window.location.assign("/admin");
+      } else if (hasPermission(permissions, "teacher:dashboard")) {
+        window.location.assign("/dashboard/teacher");
       } else {
         window.location.assign("/courses");
       }
@@ -119,6 +130,8 @@ function LoginForm() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => setCapsLock(e.getModifierState("CapsLock"))}
+                onKeyUp={(e) => setCapsLock(e.getModifierState("CapsLock"))}
                 required
                 placeholder="••••••••"
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-amber-500 transition-all"
@@ -131,6 +144,11 @@ function LoginForm() {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {capsLock && (
+              <p className="text-[10px] text-red-400 font-bold mt-1.5 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> CAPS LOCK IS ON
+              </p>
+            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -170,7 +188,7 @@ function LoginForm() {
 
         <div className="flex flex-col gap-3">
           <button
-            onClick={() => signIn("google", { callbackUrl })}
+            onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/auth/callback?next=${callbackUrl}` } })}
             className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-gray-700 transition-colors"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -182,13 +200,13 @@ function LoginForm() {
             Google
           </button>
           <button
-            onClick={() => signIn("github", { callbackUrl })}
+            onClick={() => supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: `${window.location.origin}/auth/callback?next=${callbackUrl}` } })}
             className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-gray-700 transition-colors"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16.24 11.51c0-2.31 1.88-3.41 1.97-3.46-1.07-1.57-2.73-1.79-3.34-1.81-1.42-.14-2.76.84-3.48.84-.71 0-1.82-.82-2.99-.8-1.52.02-2.93.88-3.72 2.25-1.59 2.76-.41 6.85 1.14 9.1.76 1.1 1.66 2.33 2.84 2.29 1.14-.04 1.57-.73 2.95-.73 1.38 0 1.77.73 2.97.71 1.22-.02 2.01-1.12 2.76-2.23.86-1.26 1.22-2.48 1.24-2.54-.03-.01-2.36-.91-2.34-3.62zM14.54 4.88c.63-.76 1.05-1.82.93-2.88-.91.04-2.02.61-2.67 1.37-.58.68-1.09 1.76-.94 2.8.99.08 2.05-.53 2.68-1.29z"/>
             </svg>
-            GitHub
+            Apple
           </button>
         </div>
 

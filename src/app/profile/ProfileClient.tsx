@@ -5,6 +5,8 @@ import { applyForTeacher, requestAccountDeletion, updateProfile } from "./action
 import { toast } from "sonner";
 import { User as UserIcon, Mail, Shield, Save, Trash2, Loader2, Send, Globe, MessageCircle, Camera, Briefcase, AlignLeft, Bell, Key, CreditCard } from "lucide-react";
 import ImageUpload from "@/components/ImageUpload";
+import { useSession } from "@/components/providers/SupabaseProvider";
+import { hasPermission } from "@/lib/permissions";
 
 export default function ProfileClient({ 
   user,
@@ -37,6 +39,9 @@ export default function ProfileClient({
   const [loading, setLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const { data: session } = useSession();
+  const permissions = session?.user?.permissions || [];
+  
   const diffDays = lastUpdate ? Math.ceil((new Date().getTime() - new Date(lastUpdate).getTime()) / (1000 * 3600 * 24)) : 0;
   const showApplyButton = !applicationStatus || (applicationStatus === "REJECTED" && diffDays >= 7);
 
@@ -306,7 +311,7 @@ export default function ProfileClient({
         </div>
       </div>
 
-      {user.role !== "ADMIN" && user.role !== "TEACHER" && user.role !== "SUPER_ADMIN" && (
+      {!hasPermission(permissions, "teacher:dashboard") && !hasPermission(permissions, "admin:dashboard") && (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
           <h2 className="text-xl font-bold mb-2">Become a Teacher</h2>
           <p className="text-gray-400 text-sm mb-6">Want to share your knowledge with the world? Apply to become a teacher on GraceAndGrind.</p>
@@ -338,7 +343,7 @@ export default function ProfileClient({
         </div>
       )}
 
-      {(user.role === "TEACHER" || user.role === "ADMIN" || user.role === "SUPER_ADMIN") && (
+      {(hasPermission(permissions, "teacher:dashboard") || hasPermission(permissions, "admin:dashboard")) && (
         <div className="bg-green-500/5 border border-green-500/20 rounded-2xl p-6">
           <h2 className="text-xl font-bold mb-2 text-green-400 flex items-center gap-2">
             Teacher Status

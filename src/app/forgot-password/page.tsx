@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Zap, Mail, ArrowRight, Loader2, CheckCircle } from "lucide-react";
-import { requestPasswordReset } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -15,15 +15,21 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    
+    const supabase = createClient();
     try {
-      await requestPasswordReset(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) {
+        console.error("Password reset error:", error);
+      }
+      
+      // We always show success to prevent email enumeration
       setSuccess(true);
-      setTimeout(() => {
-        router.push(`/reset-password?email=${encodeURIComponent(email)}`);
-      }, 3000);
     } catch (e) {
       console.error(e);
-      // We still show success for security to avoid email enumeration
       setSuccess(true);
     } finally {
       setLoading(false);

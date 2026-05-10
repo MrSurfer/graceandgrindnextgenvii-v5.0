@@ -1,29 +1,21 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/mail";
 import bcrypt from "bcryptjs";
 import { logAdminEvent } from "@/lib/audit";
+import { getAuthorityLevel as getPBACAuthorityLevel } from "@/lib/permissions";
 
 /**
  * HIERARCHY SOURCE OF TRUTH
  */
 async function getAuthorityLevel(user: { email: string; role: string }) {
-  const ownerEmails = (process.env.OWNER_EMAILS || "").split(",");
-  const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
-  
-  if (!user) return 0;
-  if (ownerEmails.includes(user.email) || user.role === "OWNER") return 5;
-  if (user.role === "ROOT" || superAdminEmails.includes(user.email)) return 4;
-  if (user.role === "SUPER_ADMIN") return 3;
-  if (user.role === "ADMIN") return 2;
-  if (user.role === "TEACHER") return 1;
-  return 0;
+  return getPBACAuthorityLevel(user.role, user.email);
 }
 
-export async function updateUserRole(userId: string, newRole: string) {
+export async function updateUserPermissions(userId: string, newPermissions: string[], adminPassword?: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
@@ -33,20 +25,64 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     if (!currentUser || !targetUser) return { error: "User not found" };
 
+    if (!adminPassword) return { error: "Administrator password is required to modify Keycards." };
+    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    if (!isValid) return { error: "Incorrect administrator password. Action aborted." };
+
+    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "user:edit")) return { error: "Access Denied: Missing user:edit permission." };
+
+    // 🛡️ HIERARCHY LOCKS
+    if (currentLevel <= targetLevel && currentUser.id !== userId) {
+      return { error: "Access Denied: You cannot modify permissions of someone at your level or higher." };
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { permissions: newPermissions },
+    });
+
+    await logAdminEvent(currentUser.id, "PERMISSION_CHANGE", userId, { oldPermissions: targetUser.permissions, newPermissions });
+
+    revalidatePath("/admin");
+    return { success: true, message: `Permissions updated successfully.` };
+  } catch (err: any) {
+    return { error: err.message || "Failed to update permissions" };
+  }
+}
+
+
+export async function updateUserRole(userId: string, newRole: string, adminPassword?: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!currentUser || !targetUser) return { error: "User not found" };
+
+    if (!adminPassword) return { error: "Administrator password is required to modify Roles." };
+    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    if (!isValid) return { error: "Incorrect administrator password. Action aborted." };
+
     const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
     const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
     const newRoleLevel = await getAuthorityLevel({ email: "", role: newRole });
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "user:promote")) return { error: "Access Denied: Missing user:promote permission." };
 
     // 🛡️ HIERARCHY LOCKS
     
     // 1. Peer-to-Peer & Vertical Block: You cannot modify someone at your level or higher
     if (currentLevel <= targetLevel && currentUser.id !== userId) {
       return { error: `Access Denied: You do not have authority over this ${targetUser.role} account.` };
-    }
-
-    // 2. Promotion Lock: Only ROOT (Level 4) or Owner (Level 5) can appoint ADMINs or above
-    if (newRoleLevel >= 2 && currentLevel < 4) {
-      return { error: "Access Denied: Only ROOT or OWNER can appoint leadership roles." };
     }
 
     if (newRoleLevel >= currentLevel && currentUser.role !== "OWNER" && !process.env.OWNER_EMAILS?.includes(currentUser.email)) {
@@ -98,6 +134,10 @@ export async function deleteUser(userId: string, adminPassword?: string) {
 
     const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
     const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "user:delete")) return { error: "Access Denied: Missing user:delete permission." };
 
     // 🛡️ HIERARCHY LOCKS
     if (currentLevel <= targetLevel && currentUser.id !== userId) {
@@ -134,6 +174,10 @@ export async function updateUserStatus(userId: string, newStatus: string) {
 
     const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
     const targetLevel = await getAuthorityLevel({ email: targetUser.email, role: targetUser.role });
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "user:block")) return { error: "Access Denied: Missing user:block permission." };
 
     // 🛡️ HIERARCHY LOCKS
     if (currentLevel <= targetLevel && currentUser.id !== userId) {
@@ -180,9 +224,13 @@ export async function deleteCourse(courseId: string, force: boolean = false, adm
     });
     if (!course) return { error: "Course not found" };
 
+    const permissions = (session.user as any).permissions || [];
+    const { hasPermission } = await import("@/lib/permissions");
+    if (!hasPermission(permissions, "course:delete")) return { error: "Access Denied: Missing course:delete permission." };
+
     // Only High Council (Level 4) can force delete with enrollments
-    if (course._count.enrollments > 0 && currentLevel < 4) {
-      return { error: "Cannot delete course with active enrollments. High Council override required." };
+    if (course._count.enrollments > 0 && !hasPermission(permissions, "course:delete_active")) {
+      return { error: "Cannot delete course with active enrollments. 'course:delete_active' permission required." };
     }
 
     await prisma.course.delete({ where: { id: courseId } });
@@ -199,8 +247,10 @@ export async function reviewTeacherApplication(applicationId: string, status: "A
     
     const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!currentUser) return { error: "Admin not found." };
-    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
-    if (currentLevel < 2) return { error: "Unauthorized" };
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "user:promote")) return { error: "Access Denied: Missing user:promote permission." };
 
     const application = await prisma.teacherApplication.findUnique({
       where: { id: applicationId },
@@ -237,8 +287,10 @@ export async function reviewContentRequest(
     
     const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!currentUser) return { error: "Admin not found." };
-    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
-    if (currentLevel < 2) return { error: "Unauthorized" };
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "content:approve")) return { error: "Access Denied: Missing content:approve permission." };
 
     const request = await prisma.contentRequest.findUnique({
       where: { id: requestId },
@@ -357,8 +409,10 @@ export async function manualAssignCourse(userId: string, courseId: string) {
     
     const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!currentUser) return { error: "Admin not found." };
-    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
-    if (currentLevel < 2) return { error: "Unauthorized" };
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "user:edit")) return { error: "Access Denied: Missing user:edit permission." };
 
     await prisma.enrollment.create({ data: { userId, courseId } });
     revalidatePath("/admin");
@@ -366,33 +420,62 @@ export async function manualAssignCourse(userId: string, courseId: string) {
   } catch (err: any) { return { error: err.message }; }
 }
 
-export async function forgeAccount(data: { email: string; name: string; role: string; password?: string }) {
+import { createClient } from "@supabase/supabase-js";
+
+export async function forgeAccount(data: { email: string; name: string; role: string; password?: string }, adminPassword?: string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
 
     const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!currentUser) return { error: "Admin not found." };
-    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    
+    if (!hasPermission(permissions, "user:forge")) return { error: "Access Denied: Missing user:forge permission." };
 
-    // Double-Lock: Forge requires Whitelist (Level 4)
-    if (currentLevel < 4) return { error: "Access Denied: Super Admin Double-Lock required for Forge." };
+    if (!adminPassword) return { error: "Administrator password is required to forge an account." };
+    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    if (!isValid) return { error: "Incorrect administrator password. Action aborted." };
     
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return { error: "Supabase Service Role Key is required in .env. Please add SUPABASE_SERVICE_ROLE_KEY." };
+    }
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
     const actualPassword = data.password || Math.random().toString(36).slice(-10);
-    const hashedPassword = await bcrypt.hash(actualPassword, 10);
     
-    const newUser = await prisma.user.create({
-      data: { 
-        email: data.email, 
-        name: data.name, 
-        role: data.role, 
-        password: hashedPassword, 
-        status: "ACTIVE",
-        emailVerified: new Date()
+    // Create user in Supabase Auth. The DB trigger automatically creates the Prisma row!
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password: actualPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: data.name,
+        role: data.role, // Trigger will map this to Prisma role!
       }
     });
 
-    await logAdminEvent(currentUser.id, "FORGE_ACCOUNT", newUser.id, { email: data.email, role: data.role });
+    if (authError) {
+      if (authError.message.includes("already registered")) {
+        return { error: "User with this email already exists." };
+      }
+      return { error: authError.message };
+    }
+
+    // Wait 1 second for the trigger to insert into Prisma
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const newUser = await prisma.user.findUnique({ where: { email: data.email } });
+
+    if (newUser) {
+      await logAdminEvent(currentUser.id, "FORGE_ACCOUNT", newUser.id, { email: data.email, role: data.role });
+    }
     
     revalidatePath("/admin");
     return { 
@@ -402,7 +485,6 @@ export async function forgeAccount(data: { email: string; name: string; role: st
         : `Account forged. Temp pass: ${actualPassword}` 
     };
   } catch (err: any) { 
-    if (err.code === "P2002") return { error: "User with this email already exists." };
     return { error: err.message }; 
   }
 }
@@ -414,8 +496,10 @@ export async function getCourseAnalytics(courseId: string) {
 
     const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!currentUser) return { error: "Admin not found." };
-    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
-    if (currentLevel < 2) return { error: "Unauthorized" };
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "analytics:view")) return { error: "Access Denied: Missing analytics:view permission." };
 
     const lessons = await prisma.lesson.findMany({
       where: { courseId },
@@ -466,8 +550,10 @@ export async function getHRMetrics() {
 
     const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!currentUser) return { error: "User not found." };
-    const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
-    if (currentLevel < 4) return { error: "Only ROOT and above can access HR metrics." };
+    
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    if (!hasPermission(permissions, "hr:metrics")) return { error: "Access Denied: Missing hr:metrics permission." };
 
     // Teacher Metrics
     const teachers = await prisma.user.findMany({

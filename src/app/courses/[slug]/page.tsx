@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { notFound } from "next/navigation";
 import { PlayCircle, Lock, CheckCircle } from "lucide-react";
 import Link from "next/link";
@@ -47,7 +47,7 @@ export default async function CourseDetailPage({ params }: Props) {
   const session = await auth();
 
   const course = await prisma.course.findUnique({
-    where: { slug, published: true },
+    where: { slug },
     include: {
       teacher: { select: { id: true, name: true } },
     },
@@ -56,7 +56,9 @@ export default async function CourseDetailPage({ params }: Props) {
   if (!course) return notFound();
 
   const userRole = (session?.user as any)?.role;
-  const isTeacherOrAdmin = userRole === "ADMIN" || userRole === "SUPER_ADMIN" || course.teacherId === session?.user?.id;
+  const isTeacherOrAdmin = ["ADMIN", "SUPER_ADMIN", "ROOT", "OWNER"].includes(userRole) || course.teacherId === session?.user?.id;
+
+  if (!course.published && !isTeacherOrAdmin) return notFound();
 
   const lessons = await prisma.lesson.findMany({
     where: {
@@ -135,6 +137,7 @@ export default async function CourseDetailPage({ params }: Props) {
             courseSlug={course.slug}
             price={course.price}
             isLoggedIn={!!session}
+            isCourseTeacher={course.teacherId === session?.user?.id}
           />
         </div>
       )}

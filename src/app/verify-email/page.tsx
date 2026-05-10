@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { verifyOTP, resendOTP } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { ShieldCheck, Loader2, ArrowRight, RefreshCcw, Mail } from "lucide-react";
 import { motion } from "framer-motion";
@@ -45,17 +45,25 @@ function VerifyEmailForm() {
     }
   };
 
+  const supabase = createClient();
+
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     const fullCode = code.join("");
     if (fullCode.length !== 6) return;
 
     setLoading(true);
-    const res = await verifyOTP(email!, fullCode);
+    
+    const { error } = await supabase.auth.verifyOtp({
+      email: email!,
+      token: fullCode,
+      type: 'signup'
+    });
+    
     setLoading(false);
 
-    if (res.error) {
-      toast.error(res.error);
+    if (error) {
+      toast.error(error.message || "Failed to verify email.");
     } else {
       toast.success("Email verified successfully! You can now log in.");
       router.push("/login?verified=true");
@@ -64,11 +72,16 @@ function VerifyEmailForm() {
 
   async function handleResend() {
     setResending(true);
-    const res = await resendOTP(email!);
+    
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email!
+    });
+    
     setResending(false);
 
-    if (res.error) {
-      toast.error(res.error);
+    if (error) {
+      toast.error(error.message || "Failed to resend code.");
     } else {
       toast.success("A new code has been sent to your email.");
     }

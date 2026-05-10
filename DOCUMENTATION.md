@@ -25,7 +25,7 @@ Grace & Grind NextGen exists to equip Habesha parents with practical, faith-info
 ### Tech Stack
 - **Framework:** Next.js (App Router)
 - **Database ORM:** Prisma
-- **Database:** PostgreSQL (Supabase)
+- **Database:** PostgreSQL (Supabase — Project `wcflvnkjrkrxvilsadgl`)
 - **Styling:** Tailwind CSS
 - **Authentication:** NextAuth.js
 - **Payments:** Stripe
@@ -96,7 +96,41 @@ System administration and content management utilize Next.js Server Actions.
   - **Level 4+ (ROOT/OWNER)** users have access to an exclusive "HR Metrics" tab.
   - **Educator Analytics:** Displays total programs created and student enrollment numbers per teacher.
   - **Admin Engagement:** Ranks administrative activity based on `EventLog` interaction volume.
-  - This data is used for operational oversight and rewarding platform staff.
+
+### Currency & Localization (Phase H)
+The platform supports multi-currency price display, scoped entirely to the presentation layer. No currency data is stored in the database; all prices are kept in USD and converted on the fly.
+
+- **Exchange Rate Service (`src/lib/currency.ts`):** Calls `https://api.exchangerate-api.com/v4/latest/USD` once per 24 hours using Next.js `fetch` cache (`revalidate: 86400`). On failure, falls back to hardcoded rates: `{ USD: 1, EUR: 0.93, GBP: 0.79, CAD: 1.37 }`.
+- **CurrencyContext (`src/lib/CurrencyContext.tsx`):** Provides a React context with:
+  - `currency` — active currency code (`USD | EUR | GBP | CAD`).
+  - `setCurrency(code)` — updates state and persists to `localStorage` (`preferred_currency`).
+  - `formatPrice(usdAmount)` — converts and formats prices; returns `"Free"` for `0`.
+- **Navbar Toggler:** Globe-icon `<select>` in the Navbar lets any authenticated user switch their display currency. Preference survives page refresh.
+- **Coverage:** `AdminClient.tsx` (Revenue tab stats + charts), `TeacherClient.tsx` (dashboard metrics), `AnalyticsTab.tsx` (chart axes + tooltips).
+- **Turbopack Note:** `CurrencyCode` is a TypeScript `type`. Always import it with `import type { CurrencyCode }` — mixing with value imports causes Turbopack strict-mode build errors.
+
+### Enhanced Audit Trail (Phase H)
+The Audit Logs tab in the Admin Dashboard now supports two views:
+- **Timeline View:** Original flat table showing all logs newest-first (up to 100 entries). Each action is colour-coded: DELETE=red, ROLE=amber, PERM=blue, FORGE=purple.
+- **By User View:** Actors are grouped into collapsible accordion cards, sorted by most-actions first. Each card shows the actor's name, email, role badge (colour-coded), and total action count. Expanding a card shows a compact log table for that actor.
+
+### Revenue Analytics (Phase H)
+The Admin Revenue tab now includes two **Recharts** horizontal bar charts:
+- **Top Courses by Revenue** — top 5 courses by `price × enrollments`, green bars, Y-axis in `formatPrice()`.
+- **Enrollment Distribution** — top 5 courses by enrollment count, blue bars.
+Charts are rendered only when at least one course exists and sit between the stats grid and the sortable revenue table.
+
+### Skeleton Loaders (Phase H)
+All key `loading.tsx` files were replaced with **content-shaped skeletons** using `animate-pulse` Tailwind divs. The Navbar and layout chrome remain visible during data fetches, giving a YouTube-style progressive loading experience rather than a full-screen takeover.
+
+| Route | Skeleton content |
+|-------|-----------------|
+| `/` | Stats cards + table row placeholders |
+| `/admin` | Stats cards + tab bar + user row placeholders with avatar circles |
+| `/courses` | Hero text + 6 course card grid |
+| `/courses/[slug]/[lessonSlug]` | Video player + sidebar lesson list |
+| `/dashboard/teacher` | Stats + tabs + course card rows |
+| `/profile` | Avatar circle + 3 stat blocks + enrolled course list |
 
 - **Teacher Applications (`src/app/profile/actions.ts`):**
   - Customers can apply to become teachers. The application creates a `TeacherApplication` record.
@@ -142,6 +176,34 @@ The database utilizes Prisma and includes the following key models:
 
 ---
 
+## 3.1 Row Level Security (RLS)
+
+All 12 tables in the `public` schema have RLS enabled with granular policies:
+
+| Policy Type | Tables | Access |
+|---|---|---|
+| **Full CRUD (authenticated)** | User, TeacherApplication, ContentRequest, Comment, RateLimit | Logged-in users can read, create, update, and delete |
+| **CRUD + Anon Read** | Course (published only), Lesson (free previews only) | Public visitors can browse published content |
+| **No Delete** | Enrollment, LessonProgress | Insert/update/select only — preserves enrollment and progress history |
+| **Audit-Only** | EventLog | Insert and select only — immutable audit trail |
+| **Insert + Read** | Certificate | Issued once, never modified |
+| **Standard** | Notification | Select, insert, update for authenticated |
+
+> **Important:** Prisma connects as the `postgres` owner role and **bypasses RLS entirely**. These policies serve as defense-in-depth for any direct Supabase REST API (PostgREST) access.
+
+## 3.2 Auth Trigger
+
+A database trigger `on_auth_user_created` fires after every `INSERT` on `auth.users` and calls `handle_new_user()` (SECURITY DEFINER). This function auto-creates a corresponding row in `public.User` with:
+- Generated UUID (`id`)
+- Email from `auth.users`
+- Name from `raw_user_meta_data` or derived from email
+- Default role: `CUSTOMER`
+- Default status: `ACTIVE`
+
+Source: [`supabase_trigger.sql`](file:///c:/Users/ytyir/OneDrive/Desktop/Projects/GraceAndGrindNextGenV2/graceandgrindnextgenvii/supabase_trigger.sql)
+
+---
+
 ## 4. Directory Structure
 
 - `src/app/api/`: API routes, including webhooks and Stripe checkout endpoints.
@@ -162,7 +224,9 @@ You will need a `.env` file at the root with the following keys:
 - `AUTH_SECRET`: A secret string for NextAuth encryption.
 - `STRIPE_SECRET_KEY` & `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`: Stripe API keys.
 - `STRIPE_WEBHOOK_SECRET`: Secret for validating Stripe webhooks locally and in production.
-- `NEXT_PUBLIC_SUPABASE_URL` & `SUPABASE_SERVICE_ROLE_KEY`: Supabase credentials for file storage.
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL (`https://wcflvnkjrkrxvilsadgl.supabase.co`).
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase publishable key (new `sb_publishable_*` format).
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key for server-side admin operations.
 - `RESEND_API_KEY`: API key for Resend email notifications.
 - `NODE_OPTIONS="--dns-result-order=ipv4first"`: Recommended for local dev on Windows to resolve IPv6 connection issues.
 - *OAuth credentials (Google/GitHub) if utilized.*

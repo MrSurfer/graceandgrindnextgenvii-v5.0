@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import CourseCatalog from "./CourseCatalog";
 
 export const dynamic = "force-dynamic";

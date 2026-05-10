@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import AdminClient from "./AdminClient";
@@ -24,10 +24,11 @@ export default async function AdminDashboard() {
     if (dbUser) userRole = dbUser.role;
   }
 
-  const isAdmin = userRole === "ADMIN" || userRole === "SUPER_ADMIN" || userRole === "OWNER" || isSuperAdminEmail || isOwnerEmail;
+  const { hasPermission } = await import("@/lib/permissions");
+  const permissions = session.user.permissions || [];
 
-  if (!isAdmin) {
-    console.log(`[AUTH] Access Denied to /admin: User ${session.user.email} with role ${userRole}.`);
+  if (!hasPermission(permissions, "admin:dashboard")) {
+    console.log(`[AUTH] Access Denied to /admin: User ${session.user.email} lacks admin:dashboard permission.`);
     redirect("/");
   }
 
@@ -46,6 +47,7 @@ export default async function AdminDashboard() {
       role: true, 
       status: true,
       createdAt: true,
+      permissions: true,
       enrollments: {
         include: { course: { select: { title: true, price: true } } }
       }
@@ -69,8 +71,8 @@ export default async function AdminDashboard() {
   const contentRequests = await prisma.contentRequest.findMany({
     where: { status: "PENDING" },
     include: { 
-      course: { select: { id: true, title: true } },
-      lesson: { select: { id: true, title: true } }
+      course: { select: { id: true, title: true, slug: true, teacher: { select: { id: true, name: true, email: true } } } },
+      lesson: { select: { id: true, title: true, slug: true } }
     },
     orderBy: { createdAt: "desc" },
   });
@@ -78,6 +80,14 @@ export default async function AdminDashboard() {
   const paidEnrollments = await prisma.enrollment.findMany({
     where: { stripePaymentId: { not: null } },
     select: { course: { select: { price: true } } }
+  });
+
+  const eventLogs = await prisma.eventLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: {
+      actor: { select: { name: true, email: true, role: true } },
+    },
   });
 
   const [userCount, courseCount, enrollmentCount] = statsData;
@@ -103,6 +113,7 @@ export default async function AdminDashboard() {
         courses={courses}
         applications={teacherApplications}
         contentRequests={contentRequests}
+        eventLogs={eventLogs}
         currentUserId={session.user.id}
         isSuperAdmin={isSuperAdmin || isOwner}
         superAdminEmails={superAdminWhitelist}

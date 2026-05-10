@@ -1,8 +1,10 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { User, Mail, Shield, BookOpen, Award, Zap, Clock, CheckCircle, Heart } from "lucide-react";
+import { User, Mail, Shield, BookOpen, Award, Zap, Clock, CheckCircle, Heart, Baby, Flame } from "lucide-react";
 import ProfileClient from "./ProfileClient";
+import { getUserGamification } from "@/lib/gamification";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -49,10 +51,13 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const whitelist = (process.env.SUPER_ADMIN_EMAILS || "").split(",");
-  const isHighCouncil = whitelist.includes(user.email);
-  const displayRole = isHighCouncil ? "High Council" : user.role;
-  const canCreate = user.role === "TEACHER" || user.role === "ADMIN" || user.role === "SUPER_ADMIN";
+  const { resolveEffectiveRole } = await import("@/lib/permissions");
+  const effectiveRole = resolveEffectiveRole(user.role, user.email);
+
+  const displayRole = effectiveRole;
+  const canCreate = effectiveRole === "TEACHER" || effectiveRole === "ADMIN" || effectiveRole === "SUPER_ADMIN" || effectiveRole === "ROOT" || effectiveRole === "OWNER";
+
+  const gamification = await getUserGamification(session.user.id);
 
   return (
     <div className="max-w-4xl mx-auto px-6 lg:px-12 py-16 min-h-screen">
@@ -66,7 +71,7 @@ export default async function ProfilePage() {
               name: user.name || "",
               email: user.email,
               image: (user as any).image || "",
-              role: user.role,
+              role: effectiveRole,
               displayRole: displayRole,
               bio: (user as any).bio || "",
               website: (user as any).website || "",
@@ -130,9 +135,9 @@ export default async function ProfilePage() {
                       <p className="font-bold text-gray-200 text-sm">{cert.course.title}</p>
                       <p className="text-xs text-gray-500">Issued: {new Date(cert.issuedAt).toLocaleDateString()}</p>
                     </div>
-                    <button className="bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
-                      Download
-                    </button>
+                    <Link href={`/certificates/${cert.id}`} className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                      View Certificate
+                    </Link>
                   </div>
                 ))}
               </div>
@@ -141,19 +146,38 @@ export default async function ProfilePage() {
 
           {/* Achievement Badges */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-500" /> Achievements
-            </h2>
+            <div className="flex items-start sm:items-center justify-between gap-2 mb-4">
+              <h2 className="text-xl font-bold flex items-center gap-2 truncate">
+                <Zap className="w-5 h-5 text-amber-500 shrink-0" /> <span className="truncate">Achievements</span>
+              </h2>
+              <div className="text-amber-500 font-bold bg-amber-500/10 px-3 py-1 rounded-full text-xs whitespace-nowrap shrink-0">
+                {gamification.points} Points
+              </div>
+            </div>
+            
             <div className="flex flex-wrap gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all cursor-help" title="Intentional Parent: Complete your first lesson">
-                <Heart className="w-5 h-5 text-amber-500" />
-              </div>
-              <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all cursor-help" title="Mastery Graduate: Finish an entire course">
-                <Award className="w-5 h-5 text-blue-500" />
-              </div>
-              <div className="w-10 h-10 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all cursor-help" title="Community Pillar: Post 10 discussions">
-                <Zap className="w-5 h-5 text-green-500" />
-              </div>
+              {gamification.badges.length > 0 ? (
+                gamification.badges.map(badge => {
+                  let Icon = Award;
+                  if (badge.icon === 'Baby') Icon = Baby;
+                  if (badge.icon === 'BookOpen') Icon = BookOpen;
+                  if (badge.icon === 'Flame') Icon = Flame;
+                  if (badge.icon === 'Heart') Icon = Heart;
+
+                  return (
+                    <div 
+                      key={badge.id}
+                      className={`w-10 h-10 rounded-full bg-gray-800 border flex items-center justify-center cursor-help transition-all duration-300 hover:scale-110`} 
+                      title={`${badge.name}: ${badge.description}`}
+                      style={{ borderColor: 'currentColor' }}
+                    >
+                      <Icon className={`w-5 h-5 ${badge.color}`} />
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-gray-500 italic">Complete lessons to earn badges.</p>
+              )}
             </div>
           </div>
 
@@ -162,17 +186,15 @@ export default async function ProfilePage() {
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-amber-500" /> Core Stats
             </h2>
-            <div className="grid grid-cols-1 gap-4">
-              {canCreate && (
-                <div className="bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
-                  <div className="text-3xl font-extrabold text-amber-400">
-                    {user._count.coursesCreated}
-                  </div>
-                  <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mt-1">
-                    Published
-                  </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
+                <div className="text-3xl font-extrabold text-orange-400 flex items-center justify-center gap-1">
+                  <Flame className="w-6 h-6" /> {gamification.currentStreak}
                 </div>
-              )}
+                <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mt-1">
+                  Day Streak
+                </div>
+              </div>
               <div className="bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
                 <div className="text-3xl font-extrabold text-blue-400">
                   {user.enrollments.length}
@@ -181,6 +203,16 @@ export default async function ProfilePage() {
                   Enrolled
                 </div>
               </div>
+              {canCreate && (
+                <div className="col-span-2 bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700/50">
+                  <div className="text-3xl font-extrabold text-amber-400">
+                    {user._count.coursesCreated}
+                  </div>
+                  <div className="text-xs text-gray-500 uppercase tracking-widest font-bold mt-1">
+                    Published Programs
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

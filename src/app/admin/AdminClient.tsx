@@ -1,24 +1,20 @@
 "use client";
 
-import { useState, useEffect, memo } from "react";
-import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3 } from "lucide-react";
+import React, { useState, useEffect, memo } from "react";
+import { Users, BookOpen, GraduationCap, Shield, ShieldCheck, Trash2, Loader2, AlertTriangle, DollarSign, TrendingUp, Link as LinkIcon, UserCog, Ban, CheckCircle, X, AlertCircle, Lock, Zap, ExternalLink, Settings, Search, BarChart3, Key, Save, ChevronDown, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount } from "./actions";
+import { updateUserRole, updateUserStatus, deleteUser, deleteCourse, reviewTeacherApplication, reviewContentRequest, manualAssignCourse, forgeAccount, updateUserPermissions } from "./actions";
+import { PERMISSIONS, ROLE_PERMISSIONS, hasPermission } from "@/lib/permissions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/components/providers/SupabaseProvider";
 import Pagination from "@/components/ui/Pagination";
 import HRMetricsPanel from "./HRMetricsPanel";
+import { useCurrency } from "@/lib/CurrencyContext";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 
-const TABS = [
-  { key: "users", label: "Manage Users" },
-  { key: "courses", label: "Manage Courses" },
-  { key: "applications", label: "Applications" },
-  { key: "content", label: "Content Approvals" },
-  { key: "revenue", label: "Revenue & ROI" },
-  { key: "customers", label: "Customer Management" },
-] as const;
+
 
 export default function AdminClient({
   stats,
@@ -26,6 +22,7 @@ export default function AdminClient({
   courses,
   applications,
   contentRequests,
+  eventLogs,
   currentUserId,
   superAdminEmails,
   ownerEmails,
@@ -37,6 +34,7 @@ export default function AdminClient({
   courses: any[];
   applications: any[];
   contentRequests: any[];
+  eventLogs: any[];
   currentUserId: string;
   superAdminEmails: string[];
   ownerEmails: string[];
@@ -44,8 +42,13 @@ export default function AdminClient({
   currentLevel: number;
 }) {
   const { data: session } = useSession();
+  const permissions = (session?.user as any)?.permissions || [];
+  const { formatPrice } = useCurrency();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge" | "hr">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "courses" | "revenue" | "customers" | "applications" | "content" | "forge" | "hr" | "audit">("users");
+  const [auditLogSearch, setAuditLogSearch] = useState("");
+  const [auditViewMode, setAuditViewMode] = useState<"timeline" | "grouped">("timeline");
+  const [expandedAuditUser, setExpandedAuditUser] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
@@ -63,6 +66,20 @@ export default function AdminClient({
   const [forgeData, setForgeData] = useState({ email: "", name: "", role: "USER", password: "" });
   const [forgeLoading, setForgeLoading] = useState(false);
 
+  // PBAC Modal State
+  const [selectedUserForPerms, setSelectedUserForPerms] = useState<any | null>(null);
+  const [tempPermissions, setTempPermissions] = useState<string[]>([]);
+
+  // Password Confirmation Modal State
+  const [passwordConfirmConfig, setPasswordConfirmConfig] = useState<{
+    isOpen: boolean;
+    actionType: "ROLE_CHANGE" | "PERMISSIONS_CHANGE" | "DELETE_USER" | "FORGE_ACCOUNT" | null;
+    actionData: any;
+  }>({ isOpen: false, actionType: null, actionData: null });
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showModalPassword, setShowModalPassword] = useState(false);
+  const [modalCapsLock, setModalCapsLock] = useState(false);
+
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [isMounted, setIsMounted] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -71,6 +88,7 @@ export default function AdminClient({
   const [gracePeriodMinutes, setGracePeriodMinutes] = useState(60);
 
   const [localUsers, setLocalUsers] = useState(users);
+  const [localContentRequests, setLocalContentRequests] = useState(contentRequests);
 
   useEffect(() => {
     setIsMounted(true);
@@ -81,30 +99,77 @@ export default function AdminClient({
   // Update local users when prop changes
   useEffect(() => {
     setLocalUsers(users);
-  }, [users]);
+    setLocalContentRequests(contentRequests);
+  }, [users, contentRequests]);
 
   useEffect(() => {
     setCurrentPage(1);
     setSearchQuery("");
   }, [activeTab]);
 
-  async function handleRoleChange(userId: string, newRole: string) {
-    // OPTIMISTIC UPDATE
+  function handleRoleChange(userId: string, newRole: string) {
+    setPasswordConfirmConfig({
+      isOpen: true,
+      actionType: "ROLE_CHANGE",
+      actionData: { userId, newRole }
+    });
+  }
+
+  async function executeRoleChange() {
+    const { userId, newRole } = passwordConfirmConfig.actionData;
     const previousUsers = [...localUsers];
     setLocalUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
     
+    setActionLoading(true);
+    setLoadingMessage("Updating User Role...");
     try {
-      const res = await updateUserRole(userId, newRole);
+      const res = await updateUserRole(userId, newRole, adminPassword);
       if (res.error) {
         toast.error(res.error);
         setLocalUsers(previousUsers); // Rollback
       } else {
         toast.success(res.message);
+        setPasswordConfirmConfig({ isOpen: false, actionType: null, actionData: null });
+        setAdminPassword("");
         router.refresh();
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to update role");
       setLocalUsers(previousUsers); // Rollback
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function handleUpdatePermissions() {
+    if (!selectedUserForPerms) return;
+    setPasswordConfirmConfig({
+      isOpen: true,
+      actionType: "PERMISSIONS_CHANGE",
+      actionData: null
+    });
+  }
+
+  async function executeUpdatePermissions() {
+    if (!selectedUserForPerms) return;
+    setActionLoading(true);
+    setLoadingMessage(`Syncing Keycard for ${selectedUserForPerms.email}...`);
+    try {
+      const res = await updateUserPermissions(selectedUserForPerms.id, tempPermissions, adminPassword);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        setLocalUsers(prev => prev.map(u => u.id === selectedUserForPerms.id ? { ...u, permissions: tempPermissions } : u));
+        setSelectedUserForPerms(null);
+        setPasswordConfirmConfig({ isOpen: false, actionType: null, actionData: null });
+        setAdminPassword("");
+        router.refresh();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sync permissions");
+    } finally {
+      setActionLoading(false);
     }
   }
 
@@ -211,9 +276,13 @@ export default function AdminClient({
     setActionLoading(true);
     setLoadingMessage(status === "APPROVED" ? "Syncing Content Mastery..." : "Dismissing Change Request...");
     try {
+      // Optimistic UI update
+      setLocalContentRequests(prev => prev.filter(req => req.id !== requestId));
+      
       const res = await reviewContentRequest(requestId, status, feedback, duration);
       if (res.error) {
         toast.error(res.error);
+        setLocalContentRequests(contentRequests); // Revert on error
       } else {
         toast.success(res.message);
         setAdminFeedback("");
@@ -253,12 +322,14 @@ export default function AdminClient({
     setActionLoading(true);
     setLoadingMessage(`Forging Account for ${forgeData.email}...`);
     try {
-      const res = await forgeAccount(forgeData);
+      const res = await forgeAccount(forgeData, adminPassword);
       if (res.error) {
         toast.error(res.error);
       } else {
         toast.success(res.message);
         setForgeData({ email: "", name: "", role: "USER", password: "" });
+        setPasswordConfirmConfig({ isOpen: false, actionType: null, actionData: null });
+        setAdminPassword("");
         router.refresh();
       }
     } catch (error: any) {
@@ -285,15 +356,98 @@ export default function AdminClient({
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredContentRequests = contentRequests.filter(req => 
+  const filteredContentRequests = localContentRequests.filter(req => 
     req.course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (req.lesson?.title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    req.type.toLowerCase().includes(searchQuery.toLowerCase())
+    req.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (req.course.teacher?.name || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Group content requests by Teacher
+  const groupedContentRequests = filteredContentRequests.reduce((groups: Record<string, any[]>, req) => {
+    const teacherName = req.course.teacher?.name || req.course.teacher?.email || "Unknown Teacher";
+    if (!groups[teacherName]) {
+      groups[teacherName] = [];
+    }
+    groups[teacherName].push(req);
+    return groups;
+  }, {});
 
   return (
     <>
       <LoadingOverlay isVisible={actionLoading} message={loadingMessage} theme="blue" />
+      
+      {/* Password Confirmation Modal for High-Risk Actions */}
+      {passwordConfirmConfig.isOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-red-500/20 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl shadow-red-500/10">
+            <div className="p-6 border-b border-gray-800 bg-red-500/5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                <Lock className="w-6 h-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-xl font-extrabold text-white">Security Check</h3>
+                <p className="text-xs text-red-400">High-risk action detected.</p>
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="bg-gray-800/50 rounded-2xl p-4 text-sm text-gray-300">
+                {passwordConfirmConfig.actionType === "ROLE_CHANGE" && "You are about to change a user's Base Role. This will grant or revoke entire sets of privileges."}
+                {passwordConfirmConfig.actionType === "PERMISSIONS_CHANGE" && "You are about to modify a user's explicit PBAC Keycard overlays. This bypasses their standard role limits."}
+                {passwordConfirmConfig.actionType === "FORGE_ACCOUNT" && "You are about to forge an account directly. This bypasses the normal registration flow."}
+                <br /><br />
+                Please enter your administrator password to confirm.
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Administrator Password</label>
+                <div className="relative">
+                  <input
+                    type={showModalPassword ? "text" : "password"}
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    onKeyDown={(e) => setModalCapsLock(e.getModifierState("CapsLock"))}
+                    onKeyUp={(e) => setModalCapsLock(e.getModifierState("CapsLock"))}
+                    placeholder="Verify your identity..."
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-red-500 transition-colors"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowModalPassword(!showModalPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showModalPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {modalCapsLock && (
+                  <p className="text-[10px] text-red-400 font-bold mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> CAPS LOCK IS ON
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-800 bg-gray-800/30 flex gap-3">
+              <button
+                onClick={() => { setPasswordConfirmConfig({ isOpen: false, actionType: null, actionData: null }); setAdminPassword(""); }}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (passwordConfirmConfig.actionType === "ROLE_CHANGE") executeRoleChange();
+                  if (passwordConfirmConfig.actionType === "PERMISSIONS_CHANGE") executeUpdatePermissions();
+                  if (passwordConfirmConfig.actionType === "FORGE_ACCOUNT") handleForge();
+                }}
+                disabled={!adminPassword || actionLoading}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-30 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2"
+              >
+                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-10">
         <Shield className="w-8 h-8 text-amber-500" />
         <div className="flex-grow">
@@ -309,7 +463,7 @@ export default function AdminClient({
             </span>
           </p>
         </div>
-        {isSuperAdmin && (
+        {hasPermission(permissions, "audit:view") && (
           <Link 
             href="/owner/logs" 
             className="flex items-center gap-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 px-4 py-2 rounded-xl transition-all"
@@ -327,7 +481,7 @@ export default function AdminClient({
           { label: "Total Users", value: stats.userCount, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
           { label: "Total Courses", value: stats.courseCount, icon: BookOpen, color: "text-amber-400", bg: "bg-amber-500/10" },
           { label: "Total Enrollments", value: stats.enrollmentCount, icon: GraduationCap, color: "text-green-400", bg: "bg-green-500/10" },
-          { label: "Total Revenue", value: `$${stats.totalRevenue.toFixed(2)}`, icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
+          { label: "Total Revenue", value: formatPrice(stats.totalRevenue), icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex items-center gap-4">
             <div className={`w-12 h-12 rounded-xl ${bg} flex items-center justify-center`}>
@@ -341,62 +495,37 @@ export default function AdminClient({
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-8 border-b border-gray-800 mb-10 overflow-x-auto whitespace-nowrap scrollbar-hide px-2">
-        {TABS.map((tab) => {
-          const badgeCount = tab.key === "applications" ? applications.length : tab.key === "content" ? contentRequests.length : 0;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`pb-4 text-sm font-bold transition-all relative ${
-                activeTab === tab.key ? "text-amber-500" : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                {tab.label}
-                {badgeCount > 0 && (
-                  <span className="bg-amber-500 text-gray-950 text-[10px] px-1.5 py-0.5 rounded-full font-black">
-                    {badgeCount}
-                  </span>
-                )}
-              </span>
-              {activeTab === tab.key && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 rounded-full" />
-              )}
-            </button>
-          );
-        })}
-        {isSuperAdmin && (
-          <button
-            onClick={() => setActiveTab("forge")}
-            className={`pb-4 text-sm font-bold transition-all relative ${
-              activeTab === "forge" ? "text-amber-500" : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <Zap className="w-4 h-4" /> Forge
-            </span>
-            {activeTab === "forge" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 rounded-full" />
-            )}
-          </button>
+      {/* Tabs - Categorized Dropdown */}
+      <div className="mb-10 relative max-w-xs">
+        {(applications.length > 0 || contentRequests.length > 0) && (
+          <div className="absolute -top-2 -right-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/20 border border-gray-900">
+            {applications.length + contentRequests.length}
+          </div>
         )}
-        {currentLevel >= 4 && (
-          <button
-            onClick={() => setActiveTab("hr")}
-            className={`pb-4 text-sm font-bold transition-all relative ${
-              activeTab === "hr" ? "text-amber-500" : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" /> HR Metrics
-            </span>
-            {activeTab === "hr" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 rounded-full" />
-            )}
-          </button>
-        )}
+        <select
+          value={activeTab}
+          onChange={(e) => setActiveTab(e.target.value as any)}
+          className="w-full bg-gray-900 border border-gray-800 rounded-xl pl-4 pr-10 py-3 text-white font-bold text-sm focus:ring-amber-500 focus:border-amber-500 appearance-none cursor-pointer"
+        >
+          <optgroup label="User Management">
+            <option value="users">Manage Users</option>
+            <option value="customers">Customer Management</option>
+            {hasPermission(permissions, "user:forge") && <option value="forge">Forge Account</option>}
+            {hasPermission(permissions, "hr:metrics") && <option value="hr">HR Metrics</option>}
+          </optgroup>
+          <optgroup label="Course & Content">
+            <option value="courses">Manage Courses</option>
+            <option value="applications">Applications ({applications.length})</option>
+            <option value="content">Content Approvals ({contentRequests.length})</option>
+          </optgroup>
+          <optgroup label="System & Analytics">
+            <option value="revenue">Revenue & ROI</option>
+            {hasPermission(permissions, "audit:view") && <option value="audit">Audit Logs</option>}
+          </optgroup>
+        </select>
+        <div className="absolute top-1/2 right-4 -translate-y-1/2 pointer-events-none text-gray-500 flex items-center justify-center">
+          <ChevronDown className="w-5 h-5" />
+        </div>
       </div>
 
       {/* Search Bar */}
@@ -440,7 +569,7 @@ export default function AdminClient({
                     .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
                     .map((user) => {
                     const targetLevel = (ownerEmails.includes(user.email) || user.role === "OWNER") ? 5 :
-                                        (superAdminEmails.includes(user.email)) ? 4 :
+                                        (user.role === "ROOT" || superAdminEmails.includes(user.email)) ? 4 :
                                         (user.role === "SUPER_ADMIN") ? 3 :
                                         (user.role === "ADMIN") ? 2 :
                                         (user.role === "TEACHER") ? 1 : 0;
@@ -452,16 +581,17 @@ export default function AdminClient({
                       <td className="px-6 py-4 font-medium">{user.name || "—"}</td>
                       <td className="px-6 py-4 text-gray-400 font-mono text-xs">{user.email}</td>
                       <td className="px-6 py-4">
-                        {(!canEdit && isHighLevel) ? (
-                          <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border ${
-                            targetLevel === 5
-                              ? "text-black bg-white border-white shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-                              : targetLevel === 4 
-                              ? "text-purple-400 bg-purple-500/10 border-purple-500/10" 
-                              : "text-amber-400 bg-amber-500/10 border-amber-500/10"
+                        {(!canEdit || !hasPermission(permissions, "user:promote")) ? (
+                          <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border ${
+                            targetLevel === 5 ? "text-black bg-white border-white shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+                            : targetLevel === 4 ? "text-purple-400 bg-purple-500/10 border-purple-500/10" 
+                            : targetLevel === 3 ? "text-amber-400 bg-amber-500/10 border-amber-500/10"
+                            : targetLevel === 2 ? "text-red-400 bg-red-500/10 border-red-500/10"
+                            : targetLevel === 1 ? "text-blue-400 bg-blue-500/10 border-blue-500/10"
+                            : "text-gray-400 bg-gray-800 border-gray-700"
                           }`}>
-                            <ShieldCheck className="w-3 h-3" /> 
-                            {targetLevel === 5 ? "OWNER" : targetLevel === 4 ? "ROOT" : "Super Admin"}
+                            {targetLevel >= 3 && <ShieldCheck className="w-3 h-3" />}
+                            {targetLevel === 5 ? "OWNER" : targetLevel === 4 ? "ROOT" : user.role}
                           </div>
                         ) : (
                           <select
@@ -508,29 +638,46 @@ export default function AdminClient({
                           </div>
                         ) : (
                           <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleStatusChange(user.id, user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE")}
-                              className={`p-2 rounded-lg transition-colors ${
-                                user.status === "BLOCKED" 
-                                  ? "text-green-500 hover:bg-green-500/10" 
-                                  : "text-orange-500 hover:bg-orange-500/10"
-                              }`}
-                              title={user.status === "BLOCKED" ? "Unblock User" : "Block User"}
-                            >
-                              {user.status === "BLOCKED" ? (
-                                <CheckCircle className="w-4 h-4" />
-                              ) : (
-                                <Ban className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => setItemToDelete({ type: "USER", item: user })}
-                              disabled={loadingId === user.id}
-                              className="text-gray-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-gray-800"
-                              title="Delete User"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {hasPermission(permissions, "user:block") && (
+                              <button
+                                onClick={() => handleStatusChange(user.id, user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE")}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  user.status === "BLOCKED" 
+                                    ? "text-green-500 hover:bg-green-500/10" 
+                                    : "text-orange-500 hover:bg-orange-500/10"
+                                }`}
+                                title={user.status === "BLOCKED" ? "Unblock User" : "Block User"}
+                              >
+                                {user.status === "BLOCKED" ? (
+                                  <CheckCircle className="w-4 h-4" />
+                                ) : (
+                                  <Ban className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
+                            {hasPermission(permissions, "user:edit") && (
+                              <button
+                                onClick={() => {
+                                  setSelectedUserForPerms(user);
+                                  setTempPermissions(user.permissions || []);
+                                }}
+                                disabled={loadingId === user.id}
+                                className="text-gray-500 hover:text-amber-400 transition-colors p-2 rounded-lg hover:bg-gray-800"
+                                title="Manage Permissions (PBAC)"
+                              >
+                                <Key className="w-4 h-4" />
+                              </button>
+                            )}
+                            {hasPermission(permissions, "user:delete") && (
+                              <button
+                                onClick={() => setItemToDelete({ type: "USER", item: user })}
+                                disabled={loadingId === user.id}
+                                className="text-gray-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-gray-800"
+                                title="Delete User"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -636,66 +783,77 @@ export default function AdminClient({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
-                    {filteredContentRequests.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((req) => (
-                      <tr key={req.id} className="hover:bg-gray-800/40 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-200">{req.course.title}</div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <div className="text-xs text-amber-500 font-bold">{req.lesson?.title || "Entire Course"}</div>
-                            <Link 
-                              href={req.lessonId 
-                                ? `/dashboard/teacher/courses/${req.courseId}/lessons/${req.lessonId}/edit` 
-                                : `/dashboard/teacher/courses/${req.courseId}/edit`
-                              }
-                              target="_blank"
-                              className="text-[10px] text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center gap-1"
-                            >
-                              <ExternalLink className="w-2.5 h-2.5" />
-                              View Work
-                            </Link>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                            req.type === "DELETE" ? "bg-red-500/20 text-red-400" :
-                            req.type === "EDIT" ? "bg-blue-500/20 text-blue-400" :
-                            "bg-green-500/20 text-green-400"
-                          }`}>
-                            {req.type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button 
-                            onClick={() => setSelectedRequest(req)}
-                            className="text-amber-500 hover:text-amber-400 text-xs font-bold underline decoration-amber-500/30 underline-offset-4"
-                          >
-                            View Reason & Data
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 text-gray-500 text-xs">
-                          {new Date(req.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => handleReviewContent(req.id, "APPROVED")}
-                              disabled={loadingId === req.id}
-                              className="bg-green-500 hover:bg-green-600 text-gray-950 font-bold px-4 py-2 rounded-lg text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                            >
-                              {loadingId === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleReviewContent(req.id, "REJECTED")}
-                              disabled={loadingId === req.id}
-                              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold px-4 py-2 rounded-lg text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                            >
-                              {loadingId === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                              Reject
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                    {Object.entries(groupedContentRequests)
+                      .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+                      .map(([teacherName, requests]) => (
+                      <React.Fragment key={teacherName}>
+                        <tr className="bg-gray-800/30">
+                          <td colSpan={5} className="px-6 py-3 font-bold text-gray-300 border-l-4 border-amber-500">
+                            Educator: {teacherName}
+                          </td>
+                        </tr>
+                        {requests.map((req) => (
+                          <tr key={req.id} className="hover:bg-gray-800/40 transition-colors">
+                            <td className="px-6 py-4 pl-10">
+                              <div className="font-medium text-gray-200">{req.course.title}</div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <div className="text-xs text-amber-500 font-bold">{req.lesson?.title || "Entire Course"}</div>
+                                <Link 
+                                  href={req.lessonId && req.lesson?.slug
+                                    ? `/courses/${req.course.slug}/${req.lesson.slug}` 
+                                    : `/courses/${req.course.slug}`
+                                  }
+                                  target="_blank"
+                                  className="text-[10px] text-blue-400 hover:text-blue-300 underline underline-offset-2 flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                  View Work
+                                </Link>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                                req.type === "DELETE" ? "bg-red-500/20 text-red-400" :
+                                req.type === "EDIT" ? "bg-blue-500/20 text-blue-400" :
+                                "bg-green-500/20 text-green-400"
+                              }`}>
+                                {req.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <button 
+                                onClick={() => setSelectedRequest(req)}
+                                className="text-amber-500 hover:text-amber-400 text-xs font-bold underline decoration-amber-500/30 underline-offset-4"
+                              >
+                                View Reason & Data
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500 text-xs">
+                              {new Date(req.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => handleReviewContent(req.id, "APPROVED")}
+                                  disabled={loadingId === req.id}
+                                  className="bg-green-500 hover:bg-green-600 text-gray-950 font-bold px-4 py-2 rounded-lg text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  {loadingId === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleReviewContent(req.id, "REJECTED")}
+                                  disabled={loadingId === req.id}
+                                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold px-4 py-2 rounded-lg text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  {loadingId === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                  Reject
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -703,7 +861,7 @@ export default function AdminClient({
             </div>
             <Pagination
               currentPage={currentPage}
-              totalItems={filteredContentRequests.length}
+              totalItems={Object.keys(groupedContentRequests).length}
               pageSize={PAGE_SIZE}
               onPageChange={setCurrentPage}
             />
@@ -746,11 +904,11 @@ export default function AdminClient({
                         </td>
                         <td className="px-6 py-4 text-gray-400">{course.teacher.name || course.teacher.email}</td>
                         <td className="px-6 py-4 font-mono text-amber-400">
-                          {course.price === 0 ? "Free" : `$${course.price}`}
+                          {formatPrice(course.price)}
                         </td>
                         <td className="px-6 py-4 text-gray-300">{course._count.enrollments}</td>
                         <td className="px-6 py-4 font-mono text-green-400">
-                          ${(course.price * course._count.enrollments).toFixed(2)}
+                          {formatPrice(course.price * course._count.enrollments)}
                         </td>
                         <td className="px-6 py-4">
                           <span className={`text-xs px-2 py-1 rounded-full font-medium ${course.published ? "bg-green-500/20 text-green-400" : "bg-gray-700 text-gray-500"}`}>
@@ -797,7 +955,7 @@ export default function AdminClient({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 p-6 border-b border-gray-800">
               <div className="bg-gray-800/50 rounded-xl p-5">
                 <p className="text-xs text-gray-500 tracking-widest uppercase mb-1">Total Revenue</p>
-                <p className="text-3xl font-extrabold text-green-400">${stats.totalRevenue.toFixed(2)}</p>
+                <p className="text-3xl font-extrabold text-green-400">{formatPrice(stats.totalRevenue)}</p>
               </div>
               <div className="bg-gray-800/50 rounded-xl p-5">
                 <p className="text-xs text-gray-500 tracking-widest uppercase mb-1">Paid Enrollments</p>
@@ -808,10 +966,70 @@ export default function AdminClient({
               <div className="bg-gray-800/50 rounded-xl p-5">
                 <p className="text-xs text-gray-500 tracking-widest uppercase mb-1">Avg. Revenue / Course</p>
                 <p className="text-3xl font-extrabold text-blue-400">
-                  ${courses.length > 0 ? (stats.totalRevenue / courses.filter(c => c.price > 0).length || 0).toFixed(2) : "0.00"}
+                  {courses.length > 0 ? formatPrice(stats.totalRevenue / courses.filter(c => c.price > 0).length) : formatPrice(0)}
                 </p>
               </div>
             </div>
+
+            {/* Revenue Charts */}
+            {courses.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 pb-6">
+                {/* Revenue by Course - Bar Chart */}
+                <div className="bg-gray-950 border border-gray-800 rounded-xl p-6 shadow-xl">
+                  <h3 className="text-lg font-bold mb-6 text-gray-200">Top Courses by Revenue</h3>
+                  <div className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={[...courses]
+                          .map(c => ({ name: c.title.length > 18 ? c.title.substring(0, 18) + "..." : c.title, revenue: c.price * c._count.enrollments }))
+                          .sort((a, b) => b.revenue - a.revenue)
+                          .slice(0, 5)
+                        } 
+                        layout="vertical" 
+                        margin={{ left: 10 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                        <XAxis type="number" stroke="#9CA3AF" fontSize={12} tickFormatter={(val) => formatPrice(val)} />
+                        <YAxis dataKey="name" type="category" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} width={130} />
+                        <RechartsTooltip 
+                          contentStyle={{ backgroundColor: "#111827", borderColor: "#374151", color: "#F3F4F6", borderRadius: "8px" }}
+                          formatter={(value: any) => [formatPrice(Number(value)), "Revenue"]}
+                          cursor={{ fill: "#1F2937" }}
+                        />
+                        <Bar dataKey="revenue" fill="#10B981" radius={[0, 4, 4, 0]} barSize={22} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Enrollments by Course - Bar Chart */}
+                <div className="bg-gray-950 border border-gray-800 rounded-xl p-6 shadow-xl">
+                  <h3 className="text-lg font-bold mb-6 text-gray-200">Enrollment Distribution</h3>
+                  <div className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[...courses]
+                          .map(c => ({ name: c.title.length > 18 ? c.title.substring(0, 18) + "..." : c.title, enrollments: c._count.enrollments }))
+                          .sort((a, b) => b.enrollments - a.enrollments)
+                          .slice(0, 5)
+                        }
+                        layout="vertical"
+                        margin={{ left: 10 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                        <XAxis type="number" stroke="#9CA3AF" fontSize={12} />
+                        <YAxis dataKey="name" type="category" stroke="#9CA3AF" fontSize={11} tickLine={false} axisLine={false} width={130} />
+                        <RechartsTooltip 
+                          contentStyle={{ backgroundColor: "#111827", borderColor: "#374151", color: "#F3F4F6", borderRadius: "8px" }}
+                          cursor={{ fill: "#1F2937" }}
+                        />
+                        <Bar dataKey="enrollments" fill="#3B82F6" radius={[0, 4, 4, 0]} barSize={22} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
@@ -834,11 +1052,11 @@ export default function AdminClient({
                         <tr key={course.id} className="hover:bg-gray-800/40 transition-colors">
                           <td className="px-6 py-4 font-medium">{course.title}</td>
                           <td className="px-6 py-4 text-gray-400">{course.teacher.name || course.teacher.email}</td>
-                          <td className="px-6 py-4 font-mono text-amber-400">{course.price === 0 ? "Free" : `$${course.price}`}</td>
+                          <td className="px-6 py-4 font-mono text-amber-400">{formatPrice(course.price)}</td>
                           <td className="px-6 py-4">{course._count.enrollments}</td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <span className="font-mono font-bold text-green-400">${revenue.toFixed(2)}</span>
+                              <span className="font-mono font-bold text-green-400">{formatPrice(revenue)}</span>
                               <div className="flex-1 h-1.5 bg-gray-800 rounded-full min-w-[60px]">
                                 <div
                                   className="h-full bg-green-500 rounded-full"
@@ -1092,7 +1310,7 @@ export default function AdminClient({
                     <option value="">Choose a course...</option>
                     {courses.map(course => (
                       <option key={course.id} value={course.id}>
-                        {course.title} ({course.price === 0 ? "Free" : `$${course.price}`})
+                        {course.title} ({formatPrice(course.price)})
                       </option>
                     ))}
                   </select>
@@ -1283,8 +1501,8 @@ export default function AdminClient({
 
               <div className="pt-4">
                 <button
-                  onClick={handleForge}
-                  disabled={forgeLoading || !forgeData.email || !forgeData.name}
+                  onClick={() => setPasswordConfirmConfig({ isOpen: true, actionType: "FORGE_ACCOUNT", actionData: null })}
+                  disabled={!forgeData.email || !forgeData.name}
                   className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-30 text-gray-950 font-bold py-4 rounded-2xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
                 >
                   {forgeLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
@@ -1301,6 +1519,373 @@ export default function AdminClient({
 
       {/* HR METRICS TAB */}
       {activeTab === "hr" && <HRMetricsPanel />}
+
+      {/* AUDIT LOGS TAB */}
+      {activeTab === "audit" && (() => {
+        const q = auditLogSearch.toLowerCase();
+        const filteredLogs = eventLogs.filter((log: any) =>
+          !q || log.action.toLowerCase().includes(q) || log.actor?.email?.toLowerCase().includes(q) || log.targetId?.includes(q) || log.details?.toLowerCase().includes(q)
+        );
+
+        const groupedByActor = filteredLogs.reduce((groups: Record<string, { actor: any; logs: any[] }>, log: any) => {
+          const key = log.actor?.email || "system";
+          if (!groups[key]) {
+            groups[key] = { actor: log.actor || { name: "System", email: "system", role: "SYSTEM" }, logs: [] };
+          }
+          groups[key].logs.push(log);
+          return groups;
+        }, {});
+
+        const getActionColor = (action: string) =>
+          action.includes("DELETE") ? "text-red-400 bg-red-500/10 border-red-500/20" :
+          action.includes("ROLE") ? "text-amber-400 bg-amber-500/10 border-amber-500/20" :
+          action.includes("PERM") ? "text-blue-400 bg-blue-500/10 border-blue-500/20" :
+          action.includes("FORGE") ? "text-purple-400 bg-purple-500/10 border-purple-500/20" :
+          "text-gray-400 bg-gray-800/50 border-gray-700";
+
+        const getRoleBadge = (role: string) => {
+          const map: Record<string, string> = {
+            OWNER: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+            ROOT: "bg-red-500/20 text-red-400 border-red-500/30",
+            SUPER_ADMIN: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+            ADMIN: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+            TEACHER: "bg-green-500/20 text-green-400 border-green-500/30",
+          };
+          return map[role] || "bg-gray-800/50 text-gray-400 border-gray-700";
+        };
+
+        return (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-extrabold">Audit Logs</h2>
+              <p className="text-sm text-gray-500 mt-1">Immutable record of all high-risk administrative actions.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg p-1">
+                <button
+                  onClick={() => setAuditViewMode("timeline")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${auditViewMode === "timeline" ? "bg-gray-800 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"}`}
+                >
+                  Timeline
+                </button>
+                <button
+                  onClick={() => setAuditViewMode("grouped")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${auditViewMode === "grouped" ? "bg-gray-800 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"}`}
+                >
+                  By User
+                </button>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search logs..."
+                  value={auditLogSearch}
+                  onChange={(e) => setAuditLogSearch(e.target.value)}
+                  className="w-full sm:w-72 bg-gray-900/50 border border-gray-800 rounded-xl pl-12 pr-4 py-3 text-white text-sm focus:outline-none focus:border-purple-500/50 transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+
+          {eventLogs.length === 0 ? (
+            <div className="py-24 text-center text-gray-600">
+              <ShieldCheck className="w-12 h-12 mx-auto mb-4 opacity-20" />
+              <p className="font-bold">No audit events recorded yet.</p>
+              <p className="text-sm mt-1">Actions like role changes, deletions, and permission modifications will appear here.</p>
+            </div>
+          ) : auditViewMode === "timeline" ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-800/60 text-gray-400">
+                  <tr>
+                    <th className="px-6 py-4">Action</th>
+                    <th className="px-6 py-4">Actor</th>
+                    <th className="px-6 py-4">Target ID</th>
+                    <th className="px-6 py-4">Details</th>
+                    <th className="px-6 py-4">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {filteredLogs.slice(0, 100).map((log: any) => {
+                    let parsedDetails: Record<string, any> | null = null;
+                    try { parsedDetails = JSON.parse(log.details || ""); } catch {}
+                    return (
+                      <tr key={log.id} className="hover:bg-gray-800/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${getActionColor(log.action)}`}>
+                            {log.action.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-gray-200 font-medium">{log.actor?.name || "System"}</div>
+                          <div className="text-gray-500 text-xs">{log.actor?.email}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <code className="text-xs text-gray-400 font-mono bg-gray-950 px-2 py-1 rounded">{log.targetId?.slice(0, 12) || "—"}...</code>
+                        </td>
+                        <td className="px-6 py-4 max-w-xs">
+                          {parsedDetails ? (
+                            <div className="space-y-1">
+                              {Object.entries(parsedDetails).map(([k, v]) => (
+                                <div key={k} className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 uppercase tracking-wider w-20 shrink-0">{k}</span>
+                                  <span className="text-xs text-gray-300 truncate max-w-[160px]">{String(v)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-500">{log.details || "—"}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">
+                          {new Date(log.createdAt).toLocaleString([], { 
+                            year: "numeric", month: "short", day: "numeric",
+                            hour: "2-digit", minute: "2-digit"
+                          })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {Object.entries(groupedByActor)
+                .sort((a, b) => b[1].logs.length - a[1].logs.length)
+                .map(([actorEmail, { actor, logs: actorLogs }]) => (
+                <div key={actorEmail} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                  <button
+                    onClick={() => setExpandedAuditUser(expandedAuditUser === actorEmail ? null : actorEmail)}
+                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-800/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-bold text-gray-300">
+                        {actor.name?.charAt(0).toUpperCase() || actor.email?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                      <div className="text-left">
+                        <div className="font-bold text-gray-200">{actor.name || "System"}</div>
+                        <div className="text-xs text-gray-500">{actor.email}</div>
+                      </div>
+                      {actor.role && (
+                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${getRoleBadge(actor.role)}`}>
+                          {actor.role.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 font-mono">{actorLogs.length} action{actorLogs.length !== 1 ? "s" : ""}</span>
+                      <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedAuditUser === actorEmail ? "rotate-180" : ""}`} />
+                    </div>
+                  </button>
+                  {expandedAuditUser === actorEmail && (
+                    <div className="border-t border-gray-800">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-800/40 text-gray-500">
+                          <tr>
+                            <th className="px-6 py-3 text-xs">Action</th>
+                            <th className="px-6 py-3 text-xs">Target ID</th>
+                            <th className="px-6 py-3 text-xs">Details</th>
+                            <th className="px-6 py-3 text-xs">Timestamp</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800/50">
+                          {actorLogs.map((log: any) => {
+                            let parsedDetails: Record<string, any> | null = null;
+                            try { parsedDetails = JSON.parse(log.details || ""); } catch {}
+                            return (
+                              <tr key={log.id} className="hover:bg-gray-800/20 transition-colors">
+                                <td className="px-6 py-3">
+                                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${getActionColor(log.action)}`}>
+                                    {log.action.replace(/_/g, " ")}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-3">
+                                  <code className="text-xs text-gray-400 font-mono bg-gray-950 px-2 py-1 rounded">{log.targetId?.slice(0, 12) || "—"}...</code>
+                                </td>
+                                <td className="px-6 py-3 max-w-xs">
+                                  {parsedDetails ? (
+                                    <div className="space-y-0.5">
+                                      {Object.entries(parsedDetails).map(([k, v]) => (
+                                        <div key={k} className="flex items-center gap-2">
+                                          <span className="text-[10px] text-gray-500 uppercase tracking-wider w-16 shrink-0">{k}</span>
+                                          <span className="text-xs text-gray-300 truncate max-w-[140px]">{String(v)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-gray-500">{log.details || "—"}</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-3 text-gray-500 text-xs whitespace-nowrap">
+                                  {new Date(log.createdAt).toLocaleString([], { 
+                                    year: "numeric", month: "short", day: "numeric",
+                                    hour: "2-digit", minute: "2-digit"
+                                  })}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        );
+      })()}
+
+      {/* PBAC Permission Studio Modal */}
+      {selectedUserForPerms && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl shadow-amber-500/10">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between bg-gray-800/30">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                  <Key className="w-6 h-6 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold">Permission Studio</h3>
+                  <p className="text-sm text-gray-400">
+                    Modifying Keycard for <span className="font-mono text-gray-200">{selectedUserForPerms.email}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUserForPerms(null)}
+                className="p-2 text-gray-500 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-grow">
+              <div className="mb-6 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex gap-3">
+                <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0" />
+                <div className="text-sm text-blue-200/80">
+                  <span className="font-bold text-blue-300">Base Role: {selectedUserForPerms.role}</span>
+                  <p className="mt-1">
+                    Toggle permissions to fine-tune access. <strong className="text-white">Inherit</strong> follows the base role defaults. <strong className="text-amber-400">Allow</strong> grants explicit access. <strong className="text-red-400">Deny</strong> revokes access entirely, overriding the base role.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {Object.entries(
+                  Object.entries(PERMISSIONS).reduce((acc, [key, value]) => {
+                    const category = value.split(":")[0];
+                    if (!acc[category]) acc[category] = [];
+                    acc[category].push({ key, value });
+                    return acc;
+                  }, {} as Record<string, { key: string; value: string }[]>)
+                ).map(([category, perms]) => (
+                  <div key={category} className="bg-gray-800/30 border border-gray-800/50 rounded-2xl p-5">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4 pb-2 border-b border-gray-800/50">
+                      {category}
+                    </h4>
+                    <div className="space-y-4">
+                      {perms.map(({ key, value }) => {
+                        const basePerms = ROLE_PERMISSIONS[selectedUserForPerms.role] || [];
+                        const isInheritedAllowed = basePerms.includes(value);
+                        
+                        const isExplicitAllow = tempPermissions.includes(value);
+                        const isExplicitDeny = tempPermissions.includes(`-${value}`);
+                        
+                        const currentState = isExplicitAllow ? "ALLOW" : isExplicitDeny ? "DENY" : "INHERIT";
+                        
+                        const handleStateChange = (newState: "INHERIT" | "ALLOW" | "DENY") => {
+                          let nextPerms = tempPermissions.filter(p => p !== value && p !== `-${value}`);
+                          if (newState === "ALLOW") nextPerms.push(value);
+                          if (newState === "DENY") nextPerms.push(`-${value}`);
+                          setTempPermissions(nextPerms);
+                        };
+                        
+                        return (
+                          <div key={value} className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-3 rounded-xl bg-gray-900/50 border border-gray-800/50 hover:border-gray-700 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-bold text-gray-200 flex items-center flex-wrap gap-2">
+                                <span className="truncate">{value}</span>
+                                {currentState === "INHERIT" && isInheritedAllowed && (
+                                  <span className="text-[9px] uppercase tracking-wider font-bold bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded shrink-0">
+                                    Base: Yes
+                                  </span>
+                                )}
+                                {currentState === "INHERIT" && !isInheritedAllowed && (
+                                  <span className="text-[9px] uppercase tracking-wider font-bold bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded shrink-0">
+                                    Base: No
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap bg-gray-950 rounded-lg p-1 border border-gray-800/80 shrink-0 gap-1">
+                              <button
+                                onClick={() => handleStateChange("INHERIT")}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex-1 text-center ${
+                                  currentState === "INHERIT" 
+                                    ? "bg-gray-800 text-white shadow-sm" 
+                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+                                }`}
+                              >
+                                INHERIT
+                              </button>
+                              <button
+                                onClick={() => handleStateChange("ALLOW")}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex-1 text-center ${
+                                  currentState === "ALLOW" 
+                                    ? "bg-amber-500/20 text-amber-500 shadow-sm border border-amber-500/30" 
+                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+                                }`}
+                              >
+                                ALLOW
+                              </button>
+                              <button
+                                onClick={() => handleStateChange("DENY")}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all flex-1 text-center ${
+                                  currentState === "DENY" 
+                                    ? "bg-red-500/20 text-red-400 shadow-sm border border-red-500/30" 
+                                    : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+                                }`}
+                              >
+                                DENY
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-800 bg-gray-800/30 flex justify-end gap-3">
+              <button
+                onClick={() => setSelectedUserForPerms(null)}
+                className="px-6 py-3 font-bold text-gray-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdatePermissions}
+                disabled={actionLoading}
+                className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-8 py-3 rounded-xl transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center gap-2"
+              >
+                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                Save Keycard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

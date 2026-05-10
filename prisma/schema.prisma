@@ -24,11 +24,12 @@ model User {
   twitter        String?
   instagram      String?
   linkedin       String?
+  supabaseAuthId String?             @unique
+  permissions    String[]            @default([])
   comments       Comment[]
   coursesCreated Course[]            @relation("TeacherCourses")
   enrollments    Enrollment[]
   progress       LessonProgress[]
-  resetTokens    PasswordResetToken?
   teacherApp     TeacherApplication?
   actorLogs      EventLog[]          @relation("ActorLogs")
   notifications  Notification[]
@@ -134,16 +135,7 @@ model Enrollment {
   @@unique([userId, courseId])
 }
 
-model PasswordResetToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  email     String   @unique
-  expires   DateTime
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [email], references: [email], onDelete: Cascade)
 
-  @@unique([email, token])
-}
 model RateLimit {
   id        String   @id @default(uuid())
   key       String   @unique // Usually "identifier:action" (e.g., "ip:login")
@@ -153,13 +145,6 @@ model RateLimit {
   updatedAt DateTime @updatedAt
 
   @@index([key])
-}
-model VerificationCode {
-  id        String   @id @default(uuid())
-  code      String
-  email     String   @unique
-  expires   DateTime
-  createdAt DateTime @default(now())
 }
 
 model EventLog {

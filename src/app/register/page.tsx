@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Heart, Mail, Lock, User, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck, XCircle, CheckCircle } from "lucide-react";
+import { Heart, Mail, Lock, User, ArrowRight, Loader2, Eye, EyeOff, ShieldCheck, CheckCircle, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 function RegisterForm() {
@@ -14,14 +14,13 @@ function RegisterForm() {
   if (callbackUrl.includes("/login") || callbackUrl.includes("/register") || callbackUrl.includes("/verify-email")) {
     callbackUrl = "/courses";
   }
-  const { data: session, status } = useSession();
-  
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -29,35 +28,42 @@ function RegisterForm() {
   const isPasswordStrong = password.length >= 8;
   const canSubmit = name && email && isPasswordStrong && passwordsMatch && !loading;
 
-  useEffect(() => {
-    if (status === "authenticated") {
-      router.push(callbackUrl);
-    }
-  }, [status, router, callbackUrl]);
+  // Note: we intentionally don't auto-redirect if already authenticated here.
+  // The register page should always be accessible so users can share it.
+  // After successful registration, the redirect happens in handleSubmit.
 
   const [isSuccess, setIsSuccess] = useState(false);
+  const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const res = await fetch("/api/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name,
+        },
+      },
     });
 
-    const data = await res.json();
     setLoading(false);
 
-    if (!res.ok) {
-      setError(data.error || "Something went wrong.");
+    if (authError) {
+      setError(authError.message || "Something went wrong.");
     } else {
       setIsSuccess(true);
       // Wait for the animation/onboarding message to show for 3 seconds
       setTimeout(() => {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`);
+        // If email confirmation is required, Supabase returns user but no session.
+        if (!data.session) {
+          router.push(`/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`);
+        } else {
+          router.push(callbackUrl);
+        }
       }, 3000);
     }
   }
@@ -172,6 +178,8 @@ function RegisterForm() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => setCapsLock(e.getModifierState("CapsLock"))}
+                  onKeyUp={(e) => setCapsLock(e.getModifierState("CapsLock"))}
                   required
                   placeholder="Create a strong password"
                   className={`w-full bg-gray-800 border ${password && !isPasswordStrong ? 'border-red-500/50' : 'border-gray-700'} rounded-xl pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-amber-500 transition-all`}
@@ -206,6 +214,8 @@ function RegisterForm() {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={(e) => setCapsLock(e.getModifierState("CapsLock"))}
+                  onKeyUp={(e) => setCapsLock(e.getModifierState("CapsLock"))}
                   required
                   placeholder="Repeat your password"
                   className={`w-full bg-gray-800 border ${confirmPassword && !passwordsMatch ? 'border-red-500/50' : 'border-gray-700'} rounded-xl pl-10 pr-12 py-3.5 text-sm focus:outline-none focus:border-amber-500 transition-all`}
@@ -222,6 +232,12 @@ function RegisterForm() {
                 <p className="text-[10px] text-red-400 font-medium">Passwords do not match</p>
               )}
             </div>
+
+            {capsLock && (
+              <p className="text-[10px] text-red-400 font-bold -mt-2 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> CAPS LOCK IS ON
+              </p>
+            )}
 
             <button
               id="register-btn"
@@ -245,7 +261,7 @@ function RegisterForm() {
 
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => signIn("google", { callbackUrl })}
+              onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/auth/callback?next=${callbackUrl}` } })}
               className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-gray-700 transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -257,13 +273,13 @@ function RegisterForm() {
               Google
             </button>
             <button
-              onClick={() => signIn("github", { callbackUrl })}
+              onClick={() => supabase.auth.signInWithOAuth({ provider: 'apple', options: { redirectTo: `${window.location.origin}/auth/callback?next=${callbackUrl}` } })}
               className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-gray-700 transition-colors"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16.24 11.51c0-2.31 1.88-3.41 1.97-3.46-1.07-1.57-2.73-1.79-3.34-1.81-1.42-.14-2.76.84-3.48.84-.71 0-1.82-.82-2.99-.8-1.52.02-2.93.88-3.72 2.25-1.59 2.76-.41 6.85 1.14 9.1.76 1.1 1.66 2.33 2.84 2.29 1.14-.04 1.57-.73 2.95-.73 1.38 0 1.77.73 2.97.71 1.22-.02 2.01-1.12 2.76-2.23.86-1.26 1.22-2.48 1.24-2.54-.03-.01-2.36-.91-2.34-3.62zM14.54 4.88c.63-.76 1.05-1.82.93-2.88-.91.04-2.02.61-2.67 1.37-.58.68-1.09 1.76-.94 2.8.99.08 2.05-.53 2.68-1.29z"/>
               </svg>
-              GitHub
+              Apple
             </button>
           </div>
 

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { redirect } from "next/navigation";
 import OwnerClient from "./OwnerClient";
 import { getCEOMetrics } from "./actions";

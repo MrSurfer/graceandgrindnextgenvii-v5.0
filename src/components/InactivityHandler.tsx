@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession, signOut } from "@/components/providers/SupabaseProvider";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { getBaseUrl } from "@/lib/utils";
 
+import { hasPermission } from "@/lib/permissions";
+
 /**
- * Handles inactivity timeouts based on user roles.
- * - Leadership Roles (Teacher, Admin, SuperAdmin): 4 hours (2 minutes for testing)
+ * Handles inactivity timeouts based on user permissions.
+ * - Leadership Roles (Any dashboard access): 4 hours (2 minutes for testing)
  * - Students: Infinite (unless manually logged out)
  */
 export default function InactivityHandler() {
@@ -18,11 +20,13 @@ export default function InactivityHandler() {
   const [countdown, setCountdown] = useState<number | null>(null);
   
   // CONFIGURATION
-  const TEST_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes for testing
+  const TEST_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes timeout
   const COUNTDOWN_START_S = 60; // 60 second countdown
   
-  const role = (session?.user as any)?.role;
-  const isLeadership = role === "TEACHER" || role === "ADMIN" || role === "SUPER_ADMIN";
+  const permissions = session?.user?.permissions || [];
+  const isLeadership = hasPermission(permissions, "teacher:dashboard") || 
+                       hasPermission(permissions, "admin:dashboard") || 
+                       hasPermission(permissions, "owner:dashboard");
 
   const handleLogout = useCallback(async () => {
     setCountdown(null);

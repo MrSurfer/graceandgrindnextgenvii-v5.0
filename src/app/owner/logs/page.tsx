@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import LogsClient from "./LogsClient";
@@ -9,18 +9,11 @@ export default async function EventLogsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const role = (session.user as any).role;
-  const userEmail = session.user.email || "";
+  const permissions = (session.user as any).permissions || [];
+  const { hasPermission } = await import("@/lib/permissions");
 
-  // Get whitelists
-  const ownerEmails = process.env.OWNER_EMAILS?.split(",").map((e) => e.trim()) || [];
-  const superAdminEmails = process.env.SUPER_ADMIN_EMAILS?.split(",").map((e) => e.trim()) || [];
-
-  const isOwner = role === "OWNER" || ownerEmails.includes(userEmail);
-  const isSuperAdmin = role === "SUPER_ADMIN" || superAdminEmails.includes(userEmail);
-
-  // Only ROOT (Super Admin in whitelist/role) and OWNER can view logs
-  if (!isOwner && !isSuperAdmin) {
+  // Only users with audit:view permission can view logs
+  if (!hasPermission(permissions, "audit:view")) {
     redirect("/");
   }
 

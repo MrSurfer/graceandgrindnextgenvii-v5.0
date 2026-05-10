@@ -58,7 +58,7 @@ export default function LoadingOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 flex flex-col items-center justify-center bg-gray-950/60 backdrop-blur-md z-[9999]"
+          className="fixed inset-0 pt-20 flex flex-col items-center justify-center bg-gray-950/40 backdrop-blur-sm z-40"
         >
           <div className="relative">
             <Loader2 className={`w-12 h-12 ${activeTheme.text} animate-spin`} />

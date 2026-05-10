@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
@@ -279,5 +279,84 @@ export async function requestCoursePublication(courseId: string) {
     return await submitContentRequest(courseId, "PUBLISH", null, "Initial publication request.", true);
   } catch (err: any) {
     return { error: err.message || "Failed to request publication" };
+  }
+}
+
+export async function importCourseFromJson(categoryId: string, jsonData: any) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { error: "Unauthorized" };
+
+    const { hasPermission } = await import("@/lib/permissions");
+    const permissions = (session.user as any).permissions || [];
+    
+    if (!hasPermission(permissions, "content:import")) {
+      return { error: "Access Denied: Missing content:import permission." };
+    }
+
+    if (!jsonData || !jsonData.title || !Array.isArray(jsonData.lessons)) {
+      return { error: "Invalid JSON format. Expected 'title' and 'lessons' array." };
+    }
+
+    const slug = jsonData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+
+    // Run as a transaction to ensure either everything imports or nothing does
+    const result = await prisma.$transaction(async (tx) => {
+      const course = await tx.course.create({
+        data: {
+          title: jsonData.title,
+          slug,
+          description: jsonData.description || "",
+          price: jsonData.price || 0,
+          imageUrl: jsonData.imageUrl || null,
+          teacherId: session.user.id,
+          category: categoryId,
+          published: false,
+          status: "DRAFT",
+        }
+      });
+
+      const lessonsToCreate = jsonData.lessons.map((lesson: any, index: number) => {
+        const lessonSlug = lesson.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+        
+        let videoUrl = lesson.videoUrl || null;
+        if (videoUrl) {
+          if (videoUrl.includes('youtube.com/watch?v=') || videoUrl.includes('youtu.be/')) {
+            try {
+              const videoId = videoUrl.includes('youtu.be/') 
+                ? videoUrl.split('youtu.be/')[1].split('?')[0] 
+                : new URL(videoUrl).searchParams.get('v');
+              if (videoId) videoUrl = `https://www.youtube.com/embed/${videoId}`;
+            } catch (e) {
+              // ignore malformed URLs
+            }
+          }
+        }
+
+        return {
+          title: lesson.title,
+          slug: lessonSlug,
+          content: lesson.content || "",
+          videoUrl,
+          isFreePreview: !!lesson.isFreePreview,
+          order: index,
+          status: "DRAFT",
+          courseId: course.id,
+        };
+      });
+
+      if (lessonsToCreate.length > 0) {
+        await tx.lesson.createMany({
+          data: lessonsToCreate
+        });
+      }
+
+      return course;
+    });
+
+    revalidatePath(`/dashboard/teacher`);
+    return { success: true, courseId: result.id, message: "Program imported successfully." };
+  } catch (err: any) {
+    return { error: err.message || "Failed to import JSON data" };
   }
 }

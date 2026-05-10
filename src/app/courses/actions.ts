@@ -1,9 +1,11 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+import { resolvePermissions, hasPermission } from "@/lib/permissions";
 
 export async function markLessonComplete(lessonId: string, courseSlug: string, lessonSlug: string) {
   try {
@@ -63,6 +65,25 @@ export async function addComment(lessonId: string, content: string, courseSlug: 
   try {
     const session = await auth();
     if (!session?.user?.id) return { error: "Unauthorized" };
+
+    // Check lesson:comment permission
+    const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true, permissions: true } });
+    if (!user) return { error: "User not found" };
+    const userPerms = resolvePermissions(user.role, user.permissions);
+    if (!hasPermission(userPerms, "lesson:comment")) {
+      return { error: "Commenting is disabled for your account." };
+    }
+
+    // Verify enrollment (or admin/teacher)
+    const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, select: { courseId: true } });
+    if (!lesson) return { error: "Lesson not found" };
+    const isAdminOrTeacher = ["ADMIN", "SUPER_ADMIN", "ROOT", "OWNER", "TEACHER"].includes(user.role);
+    if (!isAdminOrTeacher) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId: session.user.id, courseId: lesson.courseId } }
+      });
+      if (!enrollment) return { error: "You must be enrolled to comment." };
+    }
 
     // Rate limit: 5 comments per minute
     const limit = await checkRateLimit(session.user.id, "add-comment", { points: 5, duration: 60 });

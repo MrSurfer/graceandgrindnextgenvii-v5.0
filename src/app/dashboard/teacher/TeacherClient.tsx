@@ -2,8 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PlusCircle, BookOpen, Users, Eye, Calendar, DollarSign } from "lucide-react";
+import { PlusCircle, BookOpen, Users, Eye, Calendar, DollarSign, UploadCloud, X, FileJson, Loader2, BarChart2 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
+import { toast } from "sonner";
+import { importCourseFromJson } from "./actions";
+import AnalyticsTab from "./AnalyticsTab";
+import { useCurrency } from "@/lib/CurrencyContext";
 
 const PAGE_SIZE = 10;
 
@@ -12,14 +16,24 @@ export default function TeacherClient({
   enrollments,
   totalRevenue,
   requests,
+  categories,
+  canImport,
+  hasAnalyticsFeature,
 }: {
   courses: any[];
   enrollments: any[];
   totalRevenue: number;
   requests: any[];
+  categories: any[];
+  canImport: boolean;
+  hasAnalyticsFeature?: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState<"courses" | "enrollments" | "requests">("courses");
+  const [activeTab, setActiveTab] = useState<"courses" | "enrollments" | "requests" | "analytics">("courses");
   const [currentPage, setCurrentPage] = useState(1);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id || "");
+  const { formatPrice } = useCurrency();
 
   // Reset pagination when tab changes
   useEffect(() => {
@@ -33,13 +47,100 @@ export default function TeacherClient({
           <h1 className="text-3xl font-extrabold tracking-tight">Teacher Dashboard</h1>
           <p className="text-gray-400 mt-1">Manage your courses and student progress.</p>
         </div>
-        <Link
-          href="/dashboard/teacher/courses/new"
-          className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-lg transition-colors"
-        >
-          <PlusCircle className="w-5 h-5" /> New Course
-        </Link>
+        <div className="flex gap-4">
+          {canImport && (
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
+            >
+              <UploadCloud className="w-5 h-5" /> Import
+            </button>
+          )}
+          <Link
+            href="/dashboard/teacher/courses/new"
+            className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-lg transition-colors"
+          >
+            <PlusCircle className="w-5 h-5" /> New Course
+          </Link>
+        </div>
       </div>
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <FileJson className="w-5 h-5 text-amber-500" />
+                Import JSON Course
+              </h2>
+              <button onClick={() => setShowImportModal(false)} className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-gray-400 mb-2">Category</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-amber-500 outline-none"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center bg-gray-950/50 hover:border-amber-500 transition-colors relative">
+                <input 
+                  type="file" 
+                  accept=".json"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={importing}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    try {
+                      setImporting(true);
+                      const text = await file.text();
+                      const json = JSON.parse(text);
+                      
+                      const res = await importCourseFromJson(selectedCategory, json);
+                      if (res.error) {
+                        toast.error(res.error);
+                      } else {
+                        toast.success(res.message);
+                        setShowImportModal(false);
+                      }
+                    } catch (error) {
+                      toast.error("Invalid JSON file format.");
+                    } finally {
+                      setImporting(false);
+                      e.target.value = ""; // reset input
+                    }
+                  }}
+                />
+                {importing ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                    <p className="text-gray-400 font-medium">Importing program...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <UploadCloud className="w-8 h-8 text-gray-500" />
+                    <p className="text-white font-bold">Click or drag JSON file to upload</p>
+                    <p className="text-sm text-gray-500 mt-1 max-w-xs mx-auto">
+                      Must contain title, description, and an array of lessons.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-10">
@@ -47,7 +148,7 @@ export default function TeacherClient({
           { label: "Parenting Programs", value: courses.length, icon: BookOpen, color: "text-amber-500", bg: "bg-amber-500/10" },
           { label: "Enrolled Parents", value: enrollments.length, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
           { label: "Published Mastery", value: courses.filter((c) => c.published).length, icon: Eye, color: "text-green-400", bg: "bg-green-500/10" },
-          { label: "Mission Revenue", value: `$${totalRevenue.toFixed(2)}`, icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
+          { label: "Mission Revenue", value: formatPrice(totalRevenue), icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 flex items-center gap-4">
             <div className={`w-12 h-12 rounded-xl ${bg} flex items-center justify-center`}>
@@ -81,10 +182,21 @@ export default function TeacherClient({
         >
           Approval Tracking
         </button>
+        {hasAnalyticsFeature && (
+          <button
+            onClick={() => setActiveTab("analytics")}
+            className={`pb-3 font-medium transition-colors flex items-center gap-1.5 ${activeTab === "analytics" ? "text-amber-500 border-b-2 border-amber-500" : "text-gray-500 hover:text-gray-300"}`}
+          >
+            <BarChart2 className="w-4 h-4" /> Analytics
+          </button>
+        )}
       </div>
 
       {/* Tab Content */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        {activeTab === "analytics" && hasAnalyticsFeature && (
+          <AnalyticsTab enrollments={enrollments} courses={courses} />
+        )}
         {activeTab === "courses" && (
           <>
             {courses.length === 0 ? (
@@ -102,7 +214,7 @@ export default function TeacherClient({
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-xs text-purple-400">
-                        ${(course.price * course._count.enrollments).toFixed(2)}
+                        {formatPrice(course.price * course._count.enrollments)}
                       </span>
                       <span className={`text-xs px-3 py-1 rounded-full font-medium ${course.published ? "bg-green-500/20 text-green-400" : "bg-gray-700 text-gray-400"}`}>
                         {course.published ? "Published" : "Draft"}

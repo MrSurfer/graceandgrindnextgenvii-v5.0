@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { uploadFile, deleteFile } from "@/lib/storage";
 
 export async function uploadImageAction(formData: FormData, bucket: string = "course-assets") {

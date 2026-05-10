@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import CourseSidebar from "./CourseSidebar";

@@ -33,8 +33,10 @@ Use this document to quickly rebuild context if memory drops or if you are a new
 ## 2. Project Identity & Stack
 - **What it is:** A comprehensive online Education Hub / Content Management System (CMS). It supports free and paid courses, user roles (Customer, Teacher, Admin), and a moderation queue for content.
 - **Framework:** Next.js (App Router)
-- **Database:** PostgreSQL hosted on Supabase.
+- **Database:** PostgreSQL hosted on Supabase (Project: `wcflvnkjrkrxvilsadgl`).
 - **ORM:** Prisma (`prisma/schema.prisma`).
+- **Supabase Auth Sync:** `on_auth_user_created` trigger auto-syncs `auth.users` → `public.User`.
+- **Row Level Security:** RLS enabled on all 12 public tables with granular policies. Prisma bypasses RLS (postgres role); policies guard REST API access.
 - **Styling:** Tailwind CSS.
 - **Authentication:** NextAuth.js (`src/lib/auth.ts`).
 - **Payments:** Stripe (Checkout Sessions & Webhooks).
@@ -76,12 +78,31 @@ Use this document to quickly rebuild context if memory drops or if you are a new
 - Teachers **cannot** directly publish or edit live lessons.
 - When a teacher- **Double-Lock Security**: Super Admin access requires email whitelist in `.env` OR `SUPER_ADMIN` role in DB for general access.
 - **Inactivity Policy**: 4-hour inactivity limit for Teachers/Admins (currently 2 min for testing) with a 60s warning countdown.
-- **Optimistic UI**: Admin and dashboard actions must provide instant visual feedback before DB confirmation.
+- **Optimistic UI**: Admin and dashboard actions must provide instant visual feedback before DB confirmation. `localUsers` and `localContentRequests` state arrays are used for this in `AdminClient.tsx`.
 - **QA Standards**: All changes must be validated against `test_checklist.md`.
-- **Admin Safety:** Courses with active enrollments are "Locked". Deletion requires typing the course title exactly, and the server blocks deletion if students are enrolled (to maintain audit/refund trails).
+- **Admin Safety:** Courses with active enrollments are "Locked". Deletion requires typing the course title exactly, and the server blocks deletion if students are enrolled. Account Forging requires explicit re-verification of the administrator's password.
+
+### Currency & Localization System (Phase H)
+- **Exchange Rates (`src/lib/currency.ts`):** Fetches USD-base rates from `exchangerate-api.com` via Next.js `fetch` with `{ next: { revalidate: 86400 } }` (24h cache). Falls back to hardcoded rates on failure.
+- **CurrencyContext (`src/lib/CurrencyContext.tsx`):** React context wrapping the app. Provides `useCurrency()` hook exposing `currency`, `setCurrency`, `rates`, and `formatPrice(usdAmount: number)`. User preference is persisted in `localStorage` under key `preferred_currency`. Supported codes: `USD | EUR | GBP | CAD`.
+- **Navbar Toggler (`src/components/Navbar.tsx`):** Globe-icon dropdown for currency switching. Imports `CURRENCY_LIST` (value) and `CurrencyCode` (type) from `CurrencyContext`. **Note:** Must use `import type { CurrencyCode }` due to Turbopack strict-mode module resolution.
+- **Price Formatting:** Use `formatPrice(priceInUSD)` everywhere instead of `$${price.toFixed(2)}`. Returns `"Free"` for 0 values.
+
+### Audit Trail (Phase H)
+- **Audit Logs tab (`AdminClient.tsx`):** Has a Timeline/By-User toggle controlled by `auditViewMode` state.
+  - **Timeline:** Flat table newest-first, up to 100 entries.
+  - **By User:** Groups logs per actor, sorted by most actions. Collapsible cards with role-coloured badges. Role→colour: OWNER=amber, ROOT=red, SUPER_ADMIN=purple, ADMIN=blue, TEACHER=green.
+- **`expandedAuditUser`** state tracks which actor card is open (accordion pattern).
+
+### Skeleton Loaders (Phase H)
+- Next.js `loading.tsx` files now render **content-shaped pulse skeletons** — not full-page overlays.
+- The Navbar stays visible and interactive during data fetching (YouTube-style UX).
+- Files: `/app/loading.tsx`, `/app/admin/loading.tsx`, `/app/courses/loading.tsx`, `/app/courses/[slug]/[lessonSlug]/loading.tsx`, `/app/dashboard/teacher/loading.tsx`, `/app/profile/loading.tsx`.
+- Pattern: No imports needed — use Tailwind `bg-gray-800/XX rounded-XX animate-pulse` divs that mirror the real layout dimensions.
 
 ### Enrollment & Payments Flow
 - **Enrollment Button (`src/components/EnrollButton.tsx`):** Central logic for user enrollment. 
+  - Detects if the current user is the course creator (`isCourseTeacher`) and redirects them to their course settings instead of enrollment.
   - For **Free Programs**, it calls the `enrollInFreeCourse` Server Action directly. This ensures the user sees an immediate transition to the "Enrolled" state without a full page reload.
   - For **Paid Programs**, it handles the hand-off to the Stripe Checkout API.
 - **Checkout API (`src/app/api/checkout/[courseId]/route.ts`):** 
@@ -118,3 +139,6 @@ Use this document to quickly rebuild context if memory drops or if you are a new
 - **Emails:** Use `src/lib/mail.ts` for any automated communication.
 - **Logging:** Use `src/app/actions/logger.ts` for production-level error tracking. Detailed project history is maintained in `LOG.md`.
 - **Database Connection:** For local development, use port `5432` (Direct connection) in `.env` if the Supabase transaction pooler (`6543`) is unstable.
+- **Supabase Publishable Key:** The project uses the new `sb_publishable_*` key format (stored as `NEXT_PUBLIC_SUPABASE_ANON_KEY`). This replaces the legacy JWT-based anon key.
+- **RLS & Prisma:** Prisma connects as the `postgres` owner role and bypasses RLS entirely. RLS policies are defense-in-depth for direct Supabase REST API / PostgREST access. Anon users can only read published courses and free preview lessons.
+- **Auth Trigger:** The `handle_new_user()` function (SECURITY DEFINER) in `supabase_trigger.sql` auto-creates a `public.User` row when a new `auth.users` entry is inserted. Do not remove or modify without understanding the auth sync chain.

@@ -4,6 +4,8 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 import Navbar from "@/components/Navbar";
 import InactivityHandler from "@/components/InactivityHandler";
+import CommandPalette from "@/components/CommandPalette";
+import { getExchangeRates } from "@/lib/currency";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const firaCode = Fira_Code({ subsets: ["latin"], variable: "--font-fira" });
@@ -34,14 +36,17 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://graceandgrind.com"),
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const rates = await getExchangeRates();
+
   return (
     <html lang="en" className={`${inter.variable} ${firaCode.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-gray-950 text-gray-100 font-sans antialiased flex flex-col">
-        <Providers>
+        <Providers initialRates={rates}>
           <Navbar />
+          <CommandPalette />
           <InactivityHandler />
           <main className="flex-grow pt-16">
             {children}

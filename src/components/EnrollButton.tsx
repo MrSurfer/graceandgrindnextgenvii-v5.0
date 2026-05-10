@@ -11,6 +11,7 @@ interface EnrollButtonProps {
   courseSlug: string;
   price: number;
   isLoggedIn: boolean;
+  isCourseTeacher?: boolean;
 }
 
 export default function EnrollButton({
@@ -18,11 +19,17 @@ export default function EnrollButton({
   courseSlug,
   price,
   isLoggedIn,
+  isCourseTeacher,
 }: EnrollButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleEnroll = async () => {
+    if (isCourseTeacher) {
+      router.push(`/dashboard/teacher/courses/${courseId}/edit`);
+      return;
+    }
+
     if (!isLoggedIn) {
       router.push(`/login?callbackUrl=/courses/${courseSlug}`);
       return;
@@ -66,6 +73,8 @@ export default function EnrollButton({
           <Sparkles className="w-4 h-4" />
           {!isLoggedIn
             ? "Login to Enroll"
+            : isCourseTeacher
+            ? "Course Settings"
             : price === 0
             ? "Enroll Free"
             : `Enroll for $${price}`}

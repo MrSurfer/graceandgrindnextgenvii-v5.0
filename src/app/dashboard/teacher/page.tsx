@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import TeacherClient from "./TeacherClient";
@@ -9,8 +9,11 @@ export default async function TeacherDashboard() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const role = (session.user as any).role;
-  if (role !== "TEACHER" && role !== "ADMIN" && role !== "SUPER_ADMIN" && role !== "OWNER") redirect("/");
+  const permissions = (session.user as any).permissions || [];
+  const { hasPermission } = await import("@/lib/permissions");
+  
+  if (!hasPermission(permissions, "teacher:dashboard")) redirect("/");
+  const hasAnalyticsFeature = hasPermission(permissions, "feature:teacher_analytics");
 
   const [courses, enrollments, requests] = await Promise.all([
     prisma.course.findMany({
@@ -35,8 +38,14 @@ export default async function TeacherDashboard() {
         lesson: { select: { title: true } }
       },
       orderBy: { createdAt: "desc" }
-    })
+    }),
   ]);
+
+  // Extract distinct categories from courses or just use defaults
+  const categories = Array.from(new Set(courses.map(c => c.category).filter(Boolean))).map(c => ({ id: c, name: c }));
+  if (categories.length === 0) {
+    categories.push({ id: "Parenting", name: "Parenting" }, { id: "Education", name: "Education" });
+  }
 
   // Compute total revenue for this teacher's courses
   const totalRevenue = courses.reduce(
@@ -51,6 +60,9 @@ export default async function TeacherDashboard() {
         enrollments={enrollments} 
         totalRevenue={totalRevenue} 
         requests={requests}
+        categories={categories}
+        canImport={hasPermission(permissions, "content:import")}
+        hasAnalyticsFeature={hasAnalyticsFeature}
       />
     </div>
   );

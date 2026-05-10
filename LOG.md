@@ -1,5 +1,100 @@
 # GraceAndGrind Project Log
 
+## [2026-05-10] - Phase H: Admin Security Hardening, Currency System, Audit Trail & Skeleton UX
+
+### Added
+- **Dynamic Currency System (`src/lib/currency.ts` + `CurrencyContext.tsx`)**: Fetches live exchange rates from `exchangerate-api.com` with a 24-hour Next.js `revalidate` cache. Falls back to hardcoded rates (USD/EUR/GBP/CAD) on API failure. Exposes `useCurrency()` hook with `formatPrice(usdAmount)` and persists user preference in `localStorage`.
+- **Currency Toggler (Navbar)**: Globe-icon dropdown in `Navbar.tsx` lets any user switch between USD, EUR, GBP, CAD. All price displays across Admin Revenue tab, Teacher Dashboard, and Teacher Analytics charts update instantly.
+- **Recharts Revenue Analytics (Admin)**: Added two horizontal bar charts to the Revenue tab — "Top Courses by Revenue" (green) and "Enrollment Distribution" (blue). Both respect the active currency via `formatPrice`.
+- **Enhanced Audit Trail (Admin)**: Audit Logs tab now has a **Timeline / By User toggle**. "By User" view shows collapsible actor cards with role-coloured badges (OWNER=amber, ROOT=red, SUPER_ADMIN=purple, ADMIN=blue, TEACHER=green) and an action-count chip sorted by most active.
+- **Optimistic Content Approval UI**: Approving or rejecting a `ContentRequest` now removes the row immediately via `localContentRequests` state. Row is restored on server error with a toast notification.
+- **Content Approvals Grouped by Teacher**: The Content Approvals table now groups requests under teacher section headers with an amber left-border, making multi-course reviews more scannable. Search also matches on teacher name.
+- **Skeleton Loaders (6 routes)**: Replaced the jarring full-page `LoadingOverlay` during Next.js navigation with content-shaped skeleton screens. Nav bar stays visible and interactive. Skeletons added for: `/` (root), `/admin`, `/courses`, `/courses/[slug]/[lessonSlug]`, `/dashboard/teacher`, `/profile`.
+- **Admin `/admin/loading.tsx`**: NEW — stats + tab bar + user table skeleton.
+- **Courses `/courses/loading.tsx`**: NEW — hero + 6-card grid skeleton.
+- **Teacher `/dashboard/teacher/loading.tsx`**: NEW — stats + course card skeleton.
+- **Profile `/profile/loading.tsx`**: NEW — avatar + stats + enrolled course list skeleton.
+
+### Fixed
+- **Password Visibility & Caps Lock**: Admin Action Modal (`AdminClient.tsx`) now has Eye/EyeOff toggle and a live "⚠ Caps Lock is On" warning badge to prevent failed password confirmations.
+- **ROOT Role Display Bug**: Fixed `targetLevel` parsing so ROOT users are correctly ranked above SUPER_ADMIN and cannot be managed without explicit granted permissions.
+- **"View Work" Deep Links**: Content Approval rows now correctly link to `/courses/{slug}/{lessonSlug}` (live preview) instead of the internal editor URL.
+- **`CurrencyCode` Type Export (Turbopack)**: Fixed Turbopack strict-mode error by splitting into `import type { CurrencyCode }` and `export type { CurrencyCode }` across `CurrencyContext.tsx` and `Navbar.tsx`.
+- **Recharts Tooltip Type**: Fixed TypeScript error in `AdminClient.tsx` and `AnalyticsTab.tsx` by using `(value: any)` instead of `(value: number)` in formatter callbacks.
+- **Total Revenue Format**: Admin Revenue tab "Total Revenue" stat now uses `formatPrice()` instead of hardcoded `$` symbol.
+
+### Changed
+- `src/app/admin/page.tsx`: Content requests query now includes `teacher` data (`name`, `email`) inside the `course` select, enabling grouped-by-teacher rendering.
+- `src/app/loading.tsx`: Replaced `LoadingOverlay` with a proper stats + table skeleton.
+- `src/app/courses/[slug]/[lessonSlug]/loading.tsx`: Replaced `LoadingOverlay` with a video + sidebar lesson-list skeleton.
+
+### Build
+- `npm run build` → **Exit code 0** · 17 routes compiled · TypeScript clean.
+
+
+
+### Added
+- **Admin Tabs Categorization**: Refactored the overflowing Admin Panel tabs into a responsive `<select>` dropdown. Categorized tools into logical groups (User Management, Course & Content, System & Analytics).
+- **Teacher Enrollment Constraint**: Prevented teachers from "enrolling" in their own courses. The `EnrollButton` now dynamically detects ownership and redirects teachers directly to `/dashboard/teacher/courses/[id]/edit` under the label "Course Settings".
+
+### Fixed
+- **Forge Account Security**: Hardened the `FORGE_ACCOUNT` bypass flow. It now strictly requires an explicit administrator password verification (`bcrypt.compare`) through a secure modal before execution, preventing unauthorized rapid account creation if a session is left unattended.
+
+## [2026-05-09] - Phase B: PBAC Permission Studio & DB Polish
+
+### Added
+- **Permission Studio UI:** Added a dedicated modal inside `AdminClient.tsx` for granular PBAC management. Admins (Level 3+) can now visually assign or revoke specific overlay permissions (e.g., `course:delete`, `system:settings`) independent of the user's base role.
+- **Server Action:** Added `updateUserPermissions` to securely save PBAC keycard data.
+
+### Fixed
+- **Database Role State:** Bypassed terminal script bugs by executing direct Prisma queries to formally assign the `OWNER` role and 21 base permissions to `mys.test25@gmail.com`.
+- **Profile Page Desync:** Refactored `profile/page.tsx` to read the `effectiveRole` from the server session rather than the raw database table, properly honoring `.env` whitelists and correctly displaying "OWNER" in the UI.
+- **Login Race Condition:** Fixed an infinite spinner bug on `login/page.tsx`. By wrapping the success handler with a forced `window.location.assign()` redirect based on the freshly fetched server session, the UI reliably clears old cookies and correctly redirects to `/owner` or `/admin`.
+
+## [2026-05-09] - Phase A: Auth Migration Fixes & PBAC Bootstrap
+
+### Added
+- **PBAC Infrastructure:** Introduced `src/lib/permissions.ts` to replace strict RBAC. Defines role-to-permission templates, permission slugs, and resolver helpers.
+- **Server Action Auth Wrapper:** Created `src/app/actions/auth.ts` to allow client components to securely fetch the resolved PBAC session state from the server.
+
+### Fixed
+- **Stale Client Role Bug:** The `supabase.auth.signUp` trigger was properly creating users in Prisma but Supabase's internal `user_metadata` remained empty. This caused `SupabaseProvider` and Next.js middleware to erroneously flag all users as `CUSTOMER`, blocking admin access and breaking login redirection.
+- **Middleware Simplification:** Stripped route protection from `src/lib/supabase/middleware.ts` to focus solely on session cookie refresh. All route protection is now properly enforced at the server-component level via `auth()`, which pulls fresh Prisma data.
+- **Login Redirection:** Reverted hardcoded `/courses` redirect in `login/page.tsx` so the effect-hook can route users dynamically based on their true (server-fetched) role.
+- **SupabaseProvider Sync:** `SupabaseProvider` now hydrates client state using the secure `getCurrentSession()` server action, keeping the client 100% in sync with Prisma's source-of-truth.
+- **Dead Code Cleanup:** Removed legacy `src/app/api/auth/[...nextauth]` directory.
+
+### Changed
+- **Server Auth Engine:** Modified `src/lib/supabase/server-auth.ts` to intercept roles, apply `.env` whitelists (`OWNER_EMAILS` / `SUPER_ADMIN_EMAILS`), and inject a fully resolved `permissions` array into the session object for universal PBAC enforcement.
+
+## [2026-05-09] - New Supabase Project & Row Level Security Deployment
+
+### Added
+- **New Supabase Project:** Migrated to a fresh Supabase instance (`wcflvnkjrkrxvilsadgl`) with clean database state.
+  - **Project URL:** `https://wcflvnkjrkrxvilsadgl.supabase.co`
+  - **Pooler:** Transaction pooler on port `6543`, Session pooler on port `5432`.
+  - **Publishable Key:** Uses new `sb_publishable_*` format (replaces legacy anon key).
+- **Row Level Security (RLS):** Enabled RLS and deployed granular policies across all 12 public tables:
+  - **Full CRUD (authenticated):** `User`, `TeacherApplication`, `ContentRequest`, `Comment`, `RateLimit`.
+  - **CRUD + Anon Read (public content):** `Course` (anon can see published), `Lesson` (anon can see free previews).
+  - **No Delete (data integrity):** `Enrollment`, `LessonProgress` — preserves enrollment and progress history.
+  - **Audit-Only (immutable):** `EventLog` — insert and select only, no updates or deletes.
+  - **Insert + Read (certificates):** `Certificate` — issued once, never modified.
+  - **Standard (notifications):** `Notification` — select, insert, update for authenticated users.
+- **Auth Trigger:** Deployed `on_auth_user_created` trigger on `auth.users` to auto-sync new signups into `public.User` via `handle_new_user()` function (SECURITY DEFINER).
+- **Auto-RLS Event Trigger:** Enabled automatic RLS enforcement on all future tables created in the public schema.
+
+### Changed
+- **`.env` Updated:** All connection strings and keys now point to the new Supabase project.
+- **Prisma Schema:** Verified in sync with new database (`npx prisma db push` — already in sync).
+
+### Security Notes
+- **Prisma bypasses RLS** (connects as `postgres` owner role). RLS policies serve as defense-in-depth against direct REST API access.
+- **Anon access is restricted** to published courses and free preview lessons only — all other tables block anonymous queries.
+- **MCP Server:** Still linked to old project; needs re-authentication to target `wcflvnkjrkrxvilsadgl`.
+
+---
+
 ## [2026-05-09] - Phase 7: UI/UX Polish & Administrative Governance
 
 ### Added
