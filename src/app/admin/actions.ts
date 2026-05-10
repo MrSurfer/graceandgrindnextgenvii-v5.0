@@ -4,9 +4,27 @@ import { auth } from "@/lib/supabase/server-auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { sendEmail } from "@/lib/mail";
-import bcrypt from "bcryptjs";
 import { logAdminEvent } from "@/lib/audit";
 import { getAuthorityLevel as getPBACAuthorityLevel } from "@/lib/permissions";
+import { createClient } from "@supabase/supabase-js";
+
+/**
+ * Verify admin password by re-authenticating with Supabase Auth.
+ * Supabase Auth is the source of truth — passwords are NOT in the Prisma DB.
+ */
+async function verifyAdminPassword(email: string, password: string): Promise<boolean> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return !error;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * HIERARCHY SOURCE OF TRUTH
@@ -26,7 +44,7 @@ export async function updateUserPermissions(userId: string, newPermissions: stri
     if (!currentUser || !targetUser) return { error: "User not found" };
 
     if (!adminPassword) return { error: "Administrator password is required to modify Keycards." };
-    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    const isValid = await verifyAdminPassword(currentUser.email, adminPassword);
     if (!isValid) return { error: "Incorrect administrator password. Action aborted." };
 
     const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
@@ -67,7 +85,7 @@ export async function updateUserRole(userId: string, newRole: string, adminPassw
     if (!currentUser || !targetUser) return { error: "User not found" };
 
     if (!adminPassword) return { error: "Administrator password is required to modify Roles." };
-    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    const isValid = await verifyAdminPassword(currentUser.email, adminPassword);
     if (!isValid) return { error: "Incorrect administrator password. Action aborted." };
 
     const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
@@ -129,7 +147,7 @@ export async function deleteUser(userId: string, adminPassword?: string) {
 
     if (!adminPassword) return { error: "Administrator password is required for purge operations." };
 
-    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    const isValid = await verifyAdminPassword(currentUser.email, adminPassword);
     if (!isValid) return { error: "Incorrect administrator password. Deletion aborted." };
 
     const currentLevel = await getAuthorityLevel({ email: currentUser.email, role: currentUser.role });
@@ -215,7 +233,7 @@ export async function deleteCourse(courseId: string, force: boolean = false, adm
 
     if (!adminPassword) return { error: "Administrator password is required for destructive operations." };
 
-    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    const isValid = await verifyAdminPassword(currentUser.email, adminPassword);
     if (!isValid) return { error: "Incorrect administrator password. Deletion aborted." };
 
     const course = await prisma.course.findUnique({
@@ -420,8 +438,6 @@ export async function manualAssignCourse(userId: string, courseId: string) {
   } catch (err: any) { return { error: err.message }; }
 }
 
-import { createClient } from "@supabase/supabase-js";
-
 export async function forgeAccount(data: { email: string; name: string; role: string; password?: string }, adminPassword?: string) {
   try {
     const session = await auth();
@@ -436,7 +452,7 @@ export async function forgeAccount(data: { email: string; name: string; role: st
     if (!hasPermission(permissions, "user:forge")) return { error: "Access Denied: Missing user:forge permission." };
 
     if (!adminPassword) return { error: "Administrator password is required to forge an account." };
-    const isValid = await bcrypt.compare(adminPassword, currentUser.password || "");
+    const isValid = await verifyAdminPassword(currentUser.email, adminPassword);
     if (!isValid) return { error: "Incorrect administrator password. Action aborted." };
     
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

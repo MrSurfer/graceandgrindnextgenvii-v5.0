@@ -115,7 +115,9 @@ export default async function LessonPage({ params }: Props) {
                 lessonId={lesson.id} 
                 courseSlug={slug} 
                 lessonSlug={lessonSlug} 
-                initialCompleted={isCompleted} 
+                initialCompleted={isCompleted}
+                isLastLesson={currentIndex === lessons.length - 1}
+                courseTitle={course.title}
               />
             </div>
           )}

@@ -26,6 +26,8 @@ model User {
   linkedin       String?
   supabaseAuthId String?             @unique
   permissions    String[]            @default([])
+  nameLockedAt   DateTime?
+  nameChangePass Boolean             @default(false)
   comments       Comment[]
   coursesCreated Course[]            @relation("TeacherCourses")
   enrollments    Enrollment[]

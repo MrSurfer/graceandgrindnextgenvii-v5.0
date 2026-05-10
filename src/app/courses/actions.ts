@@ -17,6 +17,9 @@ export async function markLessonComplete(lessonId: string, courseSlug: string, l
       where: { userId_lessonId: { userId, lessonId } }
     });
 
+    let courseCompleted = false;
+    let certificateId: string | undefined;
+
     if (!existing) {
       await prisma.lessonProgress.create({
         data: { userId, lessonId }
@@ -33,11 +36,13 @@ export async function markLessonComplete(lessonId: string, courseSlug: string, l
         });
 
         if (totalLessons > 0 && completedLessons >= totalLessons) {
-          await prisma.certificate.upsert({
+          courseCompleted = true;
+          const cert = await prisma.certificate.upsert({
             where: { userId_courseId: { userId, courseId: lesson.courseId } },
             create: { userId, courseId: lesson.courseId },
             update: {}
           });
+          certificateId = cert.id;
 
           await prisma.notification.create({
             data: {
@@ -55,7 +60,7 @@ export async function markLessonComplete(lessonId: string, courseSlug: string, l
     revalidatePath(`/courses/${courseSlug}/${lessonSlug}`);
     revalidatePath(`/`);
     
-    return { success: true, message: "Lesson marked as complete" };
+    return { success: true, message: "Lesson marked as complete", courseCompleted, certificateId };
   } catch (err: any) {
     return { error: err.message || "Failed to mark complete" };
   }
